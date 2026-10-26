@@ -148,7 +148,7 @@ dashboard with:
   predictor and the pace split of each race;
 - on the *Strength* tab: every exercise with its sets, grouped by muscle group, its trend over
   time, and the balance between the muscle groups;
-- a week selector on the page, and a light / dark / system theme toggle.
+- a week selector on the page, and a theme dropdown with dark, light and high-contrast themes.
 
 The dashboard uses Garmin's own training load, HR zones and training effect. It labels every value
 that it calculates itself as an estimate. Every tab, widget and formula:

@@ -53,7 +53,8 @@ replaces only this block and the coach notes.
   and the 14-day recovery panel.
 - **Links**: the URL keeps the tab, the selected exercise and the window, for example
   `#run@2026-09-07_2026-10-26`. A reload or a shared link opens the same view.
-- **Theme**: Light, Dark or System. System is the default and follows your operating system.
+- **Theme**: a dropdown with dark, light and high-contrast themes, and System, which follows your
+  operating system. Midnight, a dark theme, is the default.
 - **Few sessions**: a type with no sessions shows an empty state. A type with one session shows a
   session card instead of trend charts. Trends start at 2 sessions.
 
