@@ -29,7 +29,7 @@ Claude gets all the data with one call to the `getDashboardData` tool:
 | `hrv` | One row for each night: HRV, its weekly average, its status and Garmin's balanced range. |
 | `recovery` | One row for each of the last 14 days. Each row has sleep by stage, sleep score, sleep need and bedtime. It also has resting HR, body battery, stress, steps, step goal and floors. |
 | `zones`, `fitnessAge` | Your HR zones and Garmin's fitness age. |
-| `sync` | The number of Garmin requests and new activities of this call, and the number of days that it could not fetch. |
+| `sync` | The number of Garmin requests and new activities of this call, and the days that it could not fetch, with their dates. |
 
 The server keeps the data in `garmin.data-dir/dashboard-cache.json`. Each call asks Garmin only for
 the days that the cache does not have, plus the last two days, because Garmin can still change

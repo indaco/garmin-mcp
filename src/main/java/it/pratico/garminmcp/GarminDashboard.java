@@ -48,7 +48,7 @@ public class GarminDashboard {
     private final GarminProperties props;
     private final ObjectMapper mapper;
     private int calls;
-    private int failedDays;
+    private ArrayNode failedDates;
 
     public GarminDashboard(GarminTools tools, GarminApiClient api, GarminProperties props, ObjectMapper mapper) {
         this.tools = tools;
@@ -72,7 +72,7 @@ public class GarminDashboard {
         // one extra week before: the dashboard shows whole Monday-Sunday weeks
         LocalDate prevStart = start.minusWeeks(w + 1L);
         calls = 0;
-        failedDays = 0;
+        failedDates = mapper.createArrayNode();
 
         ObjectNode cache = load();
         Set<String> before = new HashSet<>(cache.path("activities").propertyNames());
@@ -107,7 +107,8 @@ public class GarminDashboard {
         out.putObject("sync")
                 .put("garminCalls", calls) // one-time .FIT downloads for new sets and laps not included
                 .put("newActivities", cache.path("activities").propertyNames().stream().filter(id -> !before.contains(id)).count())
-                .put("failedDays", failedDays)
+                .put("failedDays", failedDates.size())
+                .set("failedDates", failedDates)
                 .put("cachedActivities", cache.path("activities").size());
         return out.toString();
     }
@@ -185,7 +186,7 @@ public class GarminDashboard {
                 byDate.set(day, recoveryRow(day, call(() -> tools.getSleep(day)), call(() -> tools.getDailySummary(day))));
             } catch (GarminApiClient.GarminApiException e) {
                 // keep the old row, if any; the day is fetched again on the next call
-                failedDays++;
+                failedDates.add(day);
                 log.warn("Recovery data of {} not fetched: {}", day, e.getMessage());
             }
         }

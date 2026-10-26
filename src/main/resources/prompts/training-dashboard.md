@@ -22,7 +22,8 @@ Call `getDashboardData` with `weeks` = {{weeks}}. It returns all the data in one
   `rem`, `awake`), `sleepScore`, sleep need `needH`, bedtime `bedMin` (minutes after midnight),
   `rhr`, body battery `bbHigh` and `bbLow`, `stress`, `steps`, `stepGoal`, `floors`.
 - `sync`: what the server fetched. The server keeps a local cache and asks Garmin only for the new
-  days. If `failedDays` is more than 0, name these days in chat. Their widgets show "n/a".
+  days. If `failedDays` is more than 0, name the dates in `failedDates` in chat. Their widgets show
+  "n/a".
 
 If `getDashboardData` fails, use the separate tools: `getHeartRateZones`, `listActivities` (do not
 send `activityType`, because Garmin rejects it), `getHrvRange`, `getSleep` and `getDailySummary`
@@ -94,11 +95,11 @@ indoor. All other keys are outdoor.
 - **Load safety**: the weekly load ramp (% against the previous week; flag it above +10%). For the
   last 7 days: monotony = mean daily load / standard deviation of daily load (a rest day counts as
   0; flag it above 2.0), and strain = weekly load x monotony (Foster). Label them *estimates*.
-- **Readiness today** (the dashboard's own heuristic, not Garmin's): last night's HRV status,
-  sleep score, resting HR against its 7-day average, and the load ratio. The verdict is "go easy"
-  if HRV is low, the sleep score is under 60, or resting HR is 5+ bpm above its average. It is
-  "ready to push" if HRV is balanced, the sleep score is 80+ and the load ratio is under 1.3.
-  Otherwise it is "normal". Show the four inputs next to the verdict.
+- **Readiness today** (the dashboard's own heuristic, not Garmin's): last night's HRV status, sleep
+  score, resting HR against its average of the 7 days before today, and the load ratio. The verdict
+  is "go easy" if HRV is low, the sleep score is under 60, or resting HR is 5+ bpm above its
+  average. It is "ready to push" if HRV is balanced, the sleep score is 80+ and the load ratio is
+  under 1.3. Otherwise it is "normal". Show the four inputs next to the verdict.
 - **Intensity minutes** for each week = the sum of `moderateMinutes` + 2 x `vigorousMinutes` of
   the activities of that week. Compare it with the guideline of 150 min/week. Say that it counts
   only activities, not all-day minutes.
@@ -134,9 +135,10 @@ Pick the output that fits where you are running:
   then tell me its path and the command to open it (`xdg-open` / `open`).
 
 Either way, no runtime calls to Garmin: embed the processed data as a constant at the top of the
-file, aggregated - not raw Garmin JSON. Use the `getDashboardData` result as this data, without
-changes, and add two fields: `"v": {{dashboardVersion}}` (the version of these instructions) and
-`notes` (the coach notes, a list of HTML strings). The page groups and calculates everything else in
+file. Use the `getDashboardData` result as this data, without changes, and add two fields:
+`"v": {{dashboardVersion}}` (the version of these instructions) and `notes` (the coach notes, a list
+of HTML strings). Escape every activity or exercise name inside a note, because Garmin names can
+contain markup. The page groups and calculates everything else in
 the browser. Then an update can replace the data with a new `getDashboardData` result and keep the
 page code. Put the data between the comments `/* garmin-data:start */` and `/* garmin-data:end */`,
 for example `const DATA = /* garmin-data:start */{...}/* garmin-data:end */;`, and write `<\/` for
@@ -164,9 +166,10 @@ filter chip and in the type column of the tables. The icons are decorative (`ari
 the text label stays.
 
 Put a tab bar under the header: **All**, **Run**, **Strength**, **Walk**, **Bike**, **Padel**, and
-**Hike**, **Swim** and **Other** only if they have activities. Each tab label shows its session
-count. A type with no activities in the period stays visible and shows an empty state ("no
-sessions in the last {{weeks}} weeks"), not empty charts. The URL hash keeps the selected tab, so
+**Hike**, **Swim** and **Other** only if the embedded data has activities of that type, so tabs do
+not come and go with the week window. Each tab label shows its session count. A type with no
+activities in the selected weeks stays visible and shows an empty state ("no sessions in the
+selected weeks"), not empty charts. The URL hash keeps the selected tab, so
 a reload or a shared link opens the same tab.
 
 On the **All** tab, put a row of chips: an "All" chip, then one chip for each type in the colour of
@@ -185,7 +188,7 @@ active.
    (fitness age against actual age, achievable fitness age, and the components with Garmin's
    targets).
 3. **Period comparison**: these weeks against the weeks before, for each type and in total.
-4. **Records**: the badges from section 2.
+4. **Records**: the badges from the Compute section.
 5. **Weekly volume**: stacked bars for each type, with a line for the 4-week moving average.
 6. **Load safety**: the weekly load with its ramp % (highlight the flagged weeks), monotony and
    strain.
@@ -208,8 +211,8 @@ active.
 
 Each type tab shows only that type's data:
 
-1. **KPI tiles**: the numbers for each type from section 2, the last 7 days compared with the
-   4-week average, and Garmin training load.
+1. **KPI tiles**: the numbers for each type from the Compute section, the last 7 days compared with
+   the 4-week average, and Garmin training load.
 2. **Weekly chart**: sessions and time for each week (bars). Add distance for Run, Walk and Bike.
 3. **Time in HR zones** for each week, stacked Z1-Z5.
 4. The sections of that type, below.
@@ -280,24 +283,28 @@ On first load the theme is Midnight, also on a light OS. System is a choice in t
 default. Midnight uses these colours: background `#0e1217`, panels `#161c24` and `#1c232d`, lines
 `#26303d`, text `#e6ebf2`, muted text `#8d99aa`, accent `#7cc4ff`, good `#3ecf8e`, bad `#ef5a5a`,
 warning `#f2c94c`. Design the other themes yourself. Define every colour as a CSS token, with one
-set of tokens for each theme. Dark themes use bright type colours, and light themes use darker type
-colours for contrast. Charts read the tokens and draw again when the theme changes. Keep the choice
-in `localStorage`, wrapped in try/catch, so the page still works when storage is blocked. Apply it
-before the first paint.
+set of tokens for each theme. Dark themes use these bright type colours: Run `#ff7a45`, Strength
+`#a78bfa`, Walk `#34d399`, Hike `#a3e635`, Bike `#60a5fa`, Swim `#22d3ee`, Padel `#fbbf24`, Other
+`#94a3b8`. Light themes use darker variants of the same hues for contrast. Charts read the tokens
+and draw again when the theme changes. Keep the choice in `localStorage`, wrapped in try/catch, so
+the page still works when storage is blocked. Apply it before the first paint.
 
-Selection: every click selects what it shows, and never hides it. A click on a chart legend item
-shows only that series. A second click on the same item shows all series again. The muscle-group
-chips of the Strength tab work in the same way.
+Selection: a click on a filter selects what it shows, and never hides it. A click on a chart legend
+item shows only that series. A second click on the same item shows all series again. The type chips
+and the muscle-group chips work in the same way. This rule is for filters, chips and legends only:
+rows and details that open, such as laps or an exercise, close again on a second click.
 
 Colours of a change: show a better value in green, a worse value in red, and no change in grey.
 This applies to every change and delta, for example the change of an exercise or a KPI delta.
-Where a higher value is worse (for example resting HR or the load ramp), an increase is red.
+Higher is better for volume (distance, time, sessions, load), HRV, sleep score, intensity minutes,
+efficiency, top set, estimated 1RM and sets. Higher is worse for resting HR, the load ramp,
+monotony and strain. A faster pace is better, so a slower second half of a split is red.
 
-Design: clean, data-dense but airy. Make the page title a large h1 (about 32 px), clearly larger
-than the section headings. Use one fixed colour for each type, on its tab, chip, bars and lines in
-every chart. Use tabular numbers. Make the page work down to phone width (the tab bar scrolls
-horizontally, the page does not). Make the tabs work with the keyboard. Put tooltips on every chart
-and units on every axis. Use your own visual identity: no third-party app names, logos or brand
-colours.
+Design: clean, data-dense but airy. On a phone, put two KPI tiles in each row. Make the page title a
+large h1 (about 32 px), clearly larger than the section headings. Use one fixed colour for each
+type, on its tab, chip, bars and lines in every chart. Use tabular numbers. Make the page work down
+to phone width (the tab bar scrolls horizontally, the page does not). Make the tabs work with the
+keyboard. Put tooltips on every chart and units on every axis. Use your own visual identity: no
+third-party app names, logos or brand colours.
 
 Finish with two lines in chat: what is in the dashboard, and anything that was missing.

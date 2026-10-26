@@ -31,7 +31,7 @@ only for the days after its last call.
 
 Finish with two lines in chat: the period that the dashboard now covers with the number of new
 activities (`sync.newActivities`), and anything that was missing. If `sync.failedDays` is more than
-0, name these days.
+0, name the dates in `sync.failedDates`.
 
 ## Build instructions
 
