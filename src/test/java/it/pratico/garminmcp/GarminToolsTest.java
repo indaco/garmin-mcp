@@ -2,11 +2,18 @@ package it.pratico.garminmcp;
 
 import com.garmin.fit.BenchPressExerciseName;
 import com.garmin.fit.ExerciseCategory;
+import com.garmin.fit.SetMesg;
+import com.garmin.fit.SetType;
+import com.garmin.fit.SquatExerciseName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -81,5 +88,48 @@ class GarminToolsTest {
         assertEquals(306, s.get("avgPowerW").asInt());
         assertEquals(295, s.get("gctMs").asInt());
         assertEquals(8.9, s.get("vertOscCm").asDouble());
+    }
+
+    @Test
+    void summaryHasIntensityMinutesAndSwimFields() {
+        JsonNode swim = json.readTree("""
+                {"activityId":3,"activityType":{"typeKey":"lap_swimming"},"distance":1500.0,
+                 "duration":2100.0,"movingDuration":2050.0,"moderateIntensityMinutes":20,
+                 "vigorousIntensityMinutes":15,"averageSwolf":38.4,"poolLength":2500.0,
+                 "activeLengths":60,"strokes":980.0}""");
+        ObjectNode s = tools.summarize(swim);
+        assertEquals(20, s.get("moderateMinutes").asInt());
+        assertEquals(15, s.get("vigorousMinutes").asInt());
+        assertEquals(38, s.get("swolf").asInt());
+        assertEquals(25.0, s.get("poolLengthM").asDouble());
+        assertEquals(60, s.get("lengths").asInt());
+        assertEquals(980, s.get("strokes").asInt());
+    }
+
+    @Test
+    void restPeriodBecomesRestSecOnThePreviousSet() {
+        ArrayNode out = tools.groupSets(List.of(
+                set(SetType.ACTIVE, 12, 35f, 206f), set(SetType.REST, null, null, 90f),
+                set(SetType.ACTIVE, 10, 50f, 123f), set(SetType.REST, null, null, 120f),
+                set(SetType.ACTIVE, 0, null, 7f)), Map.of());
+        assertEquals(1, out.size());
+        assertEquals("Barbell Box Squat", out.get(0).get("exercise").asString());
+        assertEquals("Squat", out.get(0).get("category").asString());
+        assertEquals("[{\"reps\":12,\"kg\":35.0,\"seconds\":206,\"restSec\":90},"
+                + "{\"reps\":10,\"kg\":50.0,\"seconds\":123,\"restSec\":120},"
+                + "{\"reps\":0,\"seconds\":7}]", out.get(0).get("sets").toString());
+    }
+
+    private static SetMesg set(short type, Integer reps, Float kg, Float seconds) {
+        SetMesg s = new SetMesg();
+        s.setSetType(type);
+        s.setRepetitions(reps);
+        s.setWeight(kg);
+        s.setDuration(seconds);
+        if (type == SetType.ACTIVE) {
+            s.setCategory(0, ExerciseCategory.SQUAT);
+            s.setCategorySubtype(0, SquatExerciseName.BARBELL_BOX_SQUAT);
+        }
+        return s;
     }
 }
