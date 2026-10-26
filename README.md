@@ -148,7 +148,15 @@ The server exposes an MCP prompt, `training-dashboard`, with one optional argume
    hard share. Also running form (cadence, stride, ground contact, vertical oscillation, power),
    Run Walk Run segments and training effect;
 6. on the *Strength* tab, list each exercise with its sets for each session. Show its trend over
-   time (top set, estimated 1RM, volume), and the weekly sets for each movement category.
+   time (top set, estimated 1RM, volume, rest) and the weekly sets for each movement category.
+   Also show the push / pull / legs / core balance;
+7. let you select the weeks on the page (presets and a from/to week selector; the link keeps the
+   window). Each sport has an icon and a colour;
+8. add on the *All* tab: a readiness verdict for today (the dashboard's own heuristic) and the
+   fitness age. Also these weeks compared with the weeks before, and the records in the period.
+   Also load ramp, monotony and strain, and weekly intensity minutes against the guideline of 150
+   minutes. The Run tab adds a race predictor and the pace split of each race. Hike and Swim tabs
+   show when you have these activities.
 
 Training load and time in HR zones are Garmin's own numbers. The dashboard uses an estimate only
 for an activity that does not have them, and labels it.
@@ -243,17 +251,23 @@ Prompt text and worked examples:
 
 | Tool | Endpoint | Notes |
 |---|---|---|
-| `listActivities` | `/activitylist-service/activities/search/activities` | compact summary (km, moving and elapsed time, pace, HR, cadence, ascent, HR-zone seconds, Garmin training load and training effect, race flag, best efforts, power, running form, run/walk segments); `raw=true` for full JSON |
+| `listActivities` | `/activitylist-service/activities/search/activities` | compact summary (km, moving and elapsed time, pace, HR, cadence, ascent, HR-zone seconds, Garmin training load and training effect, intensity minutes, race flag, best efforts, power, running form, run/walk segments, swim SWOLF/lengths/strokes); `raw=true` for full JSON |
 | `getActivity` | `/activity-service/activity/{id}` | summary, metadata, segments by type |
 | `getActivityLaps` | `/download-service/files/activity/{id}` | laps decoded from the .FIT file: km, time, pace or speed, HR, cadence, ascent, power, intensity |
-| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, movement category, reps, weight (kg), set time |
+| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, movement category, reps, weight (kg), set time, rest after the set |
 | `downloadActivityFit` | `/download-service/files/activity/{id}` | saves `{id}.fit` under `garmin.data-dir/fit` (cached: downloaded once) |
 | `getHrvRange` | `/hrv-service/hrv/daily/{from}/{to}` | overnight HRV |
 | `getDailyHeartRate` | `/wellness-service/wellness/dailyHeartRate` | includes resting HR |
 | `getSleep` | `/sleep-service/sleep/dailySleep` | date = the morning you woke up |
 | `getHeartRateZones` | `/biometric-service/heartRateZones/v2` | |
+| `getFitnessAge` | `/fitnessage-service/fitnessage/v2/{date}` | fitness age compared with actual age, and its components |
 | `getDailySummary` | `/usersummary-service/usersummary/daily` | steps, stress, body battery |
 | `garminGet` | any other GET | relative path + query string |
+
+These Garmin Connect data are not in the Personal API (the endpoints answer 404): VO2 max,
+training status and readiness, race predictions, personal records, weight, gear, activity weather,
+endurance and hill score, lactate threshold, exercise sets. Where the dashboard needs one of these
+values, it calculates its own estimate and labels it.
 
 Dates are `yyyy-MM-dd`. The Swagger summary does not always spell out query parameter names: if
 an endpoint answers 400, `garminGet` lets Claude try another name without a rebuild.

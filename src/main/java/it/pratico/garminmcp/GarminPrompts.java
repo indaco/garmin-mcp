@@ -40,10 +40,14 @@ public class GarminPrompts {
         return new SyncPromptSpecification(prompt, (exchange, request) -> {
             int weeks = weeks(request.arguments());
             LocalDate today = LocalDate.now();
+            LocalDate start = today.minusWeeks(weeks);
             return result(prompt, render(template, Map.of(
                     "weeks", String.valueOf(weeks),
                     "today", today.toString(),
-                    "startDate", today.minusWeeks(weeks).toString())));
+                    "startDate", start.toString(),
+                    // one extra week: the dashboard shows whole Monday-Sunday weeks, one more than asked when today is mid-week
+                    "prevStartDate", start.minusWeeks(weeks + 1L).toString(),
+                    "prevEndDate", start.minusDays(1).toString())));
         });
     }
 

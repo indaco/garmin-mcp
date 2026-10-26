@@ -53,7 +53,8 @@ public class GarminTools {
             local start time, distance (km), moving duration, average pace, average/max heart rate,
             cadence, ascent; when Garmin has them: elapsed time (if longer than moving time), race flag,
             Garmin training load, aerobic/anaerobic training effect and label, seconds in HR zones 1-5,
-            calories, body battery change, steps, power, running form (stride, ground contact, vertical
+            calories, moderate/vigorous intensity minutes, body battery change, steps, swim SWOLF, pool
+            length, lengths and strokes, power, running form (stride, ground contact, vertical
             oscillation and ratio), grade-adjusted pace, best efforts (1k, mile, 5k, 10k, half,
             marathon) and run/walk segments. Dates are yyyy-MM-dd. Set raw=true for Garmin's full JSON.""")
     public String listActivities(
@@ -154,10 +155,11 @@ public class GarminTools {
 
     @Tool(description = """
             Strength training sets of an activity, read from the original .FIT file. One entry per
-            exercise, in the order first done, with its movement category and its active sets: reps, weight (kg, absent for
-            bodyweight) and set time in seconds. Rest periods are left out. Exercise names are stable
-            across sessions, so they can be used for per-exercise trends. Edits made later in Garmin
-            Connect (renamed exercises, corrected reps or weights) are not in the .FIT file.""")
+            exercise, in the order first done, with its movement category and its active sets: reps,
+            weight (kg, absent when none was recorded), set time in seconds and the rest after the set
+            (restSec). Exercise names are stable across sessions, so they can be used for per-exercise
+            trends. Edits made later in Garmin Connect (renamed exercises, corrected reps or weights)
+            are not in the .FIT file.""")
     public String getActivitySets(@ToolParam(description = "Garmin activity id") long activityId)
             throws IOException {
         FitMessages fit = decodeFit(activityId);
@@ -167,9 +169,22 @@ public class GarminTools {
                 stepNames.put(t.getExerciseCategory() + "/" + t.getExerciseName(), t.getWktStepName(0));
             }
         }
+        ObjectNode out = mapper.createObjectNode();
+        out.put("activityId", activityId);
+        out.set("exercises", groupSets(fit.getSetMesgs(), stepNames));
+        return out.toString();
+    }
+
+    /** One entry per exercise, in the order first done; a rest period becomes restSec on the set before it. */
+    ArrayNode groupSets(List<SetMesg> sets, Map<String, String> stepNames) {
         Map<String, ObjectNode> exercises = new LinkedHashMap<>();
-        for (SetMesg s : fit.getSetMesgs()) {
+        ObjectNode previous = null;
+        for (SetMesg s : sets) {
             if (s.getSetType() == null || s.getSetType() != SetType.ACTIVE) {
+                if (previous != null && s.getSetType() != null && s.getSetType() == SetType.REST
+                        && s.getDuration() != null) {
+                    previous.put("restSec", Math.round(s.getDuration()));
+                }
                 continue;
             }
             Integer category = s.getNumCategory() > 0 ? s.getCategory(0) : null;
@@ -190,11 +205,9 @@ public class GarminTools {
             if (s.getDuration() != null) {
                 set.put("seconds", Math.round(s.getDuration()));
             }
+            previous = set;
         }
-        ObjectNode out = mapper.createObjectNode();
-        out.put("activityId", activityId);
-        out.putArray("exercises").addAll(exercises.values());
-        return out.toString();
+        return mapper.createArrayNode().addAll(exercises.values());
     }
 
     // ------------------------------------------------------------------ health
@@ -218,6 +231,14 @@ public class GarminTools {
     @Tool(description = "Heart rate zones currently configured in Garmin Connect.")
     public String getHeartRateZones() {
         return api.getJson("/biometric-service/heartRateZones/v2", Map.of()).toString();
+    }
+
+    @Tool(description = """
+            Garmin fitness age for a date, yyyy-MM-dd: fitness age vs chronological age, the achievable
+            fitness age, and its components (body fat, vigorous days and minutes per week, resting HR)
+            with the targets Garmin suggests.""")
+    public String getFitnessAge(@ToolParam(description = "Date yyyy-MM-dd") String date) {
+        return api.getJson("/fitnessage-service/fitnessage/v2/" + date, Map.of()).toString();
     }
 
     @Tool(description = "Daily user summary for one date (steps, calories, stress, body battery, resting HR), yyyy-MM-dd.")
@@ -293,6 +314,16 @@ public class GarminTools {
             }
         }
         putRounded(a, o, "calories", "calories", 0);
+        copy(a, o, "moderateIntensityMinutes", "moderateMinutes");
+        copy(a, o, "vigorousIntensityMinutes", "vigorousMinutes");
+        putRounded(a, o, "averageSwolf", "swolf", 0);
+        double pool = a.path("poolLength").asDouble(0);
+        if (pool > 0) {
+            // shortcut: assumes Garmin's centimetres (2500 = 25 m); unconfirmed on a real swim, check unitOfPoolLength if wrong
+            o.put("poolLengthM", round(pool / 100.0, 1));
+        }
+        copy(a, o, "activeLengths", "lengths");
+        putRounded(a, o, "strokes", "strokes", 0);
         copy(a, o, "differenceBodyBattery", "bodyBatteryDelta");
         copy(a, o, "steps", "steps");
         putRounded(a, o, "avgPower", "avgPowerW", 0);
