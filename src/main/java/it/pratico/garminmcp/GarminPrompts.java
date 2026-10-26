@@ -21,6 +21,8 @@ import java.util.Set;
 public class GarminPrompts {
 
     private static final int DEFAULT_WEEKS = 12;
+    /** Version of the dashboard build text. Bump it when the page that it describes changes: updates then rebuild older pages. */
+    static final int DASHBOARD_VERSION = 2;
     private static final int MAX_WEEKS = 52;
     private static final Set<String> STYLES = Set.of("clean", "poster", "neon", "bib", "magazine", "splits");
     private static final Set<String> FORMATS = Set.of("story", "post", "square");
@@ -54,11 +56,16 @@ public class GarminPrompts {
         return new SyncPromptSpecification(prompt, (exchange, request) -> {
             boolean given = !arg(request.arguments(), "weeks").isEmpty();
             int weeks = weeks(request.arguments());
+            // the build text becomes sections B1-B3, so its numbers do not clash with the update's own sections
+            String buildText = renderDashboard(build, weeks)
+                    .replaceAll("(?m)^### ", "#### ")
+                    .replaceAll("(?m)^## (\\d+)\\. ", "### B$1. ");
             return result(prompt, render(template, Map.of(
                     "today", LocalDate.now().toString(),
                     "weeks", given ? String.valueOf(weeks)
                             : "the `weeks` value of the data block (" + DEFAULT_WEEKS + " if it has none)",
-                    "build", renderDashboard(build, weeks))));
+                    "dashboardVersion", String.valueOf(DASHBOARD_VERSION),
+                    "build", buildText)));
         });
     }
 
@@ -66,6 +73,7 @@ public class GarminPrompts {
         LocalDate today = LocalDate.now();
         LocalDate start = today.minusWeeks(weeks);
         return render(template, Map.of(
+                "dashboardVersion", String.valueOf(DASHBOARD_VERSION),
                 "weeks", String.valueOf(weeks),
                 "today", today.toString(),
                 "startDate", start.toString(),

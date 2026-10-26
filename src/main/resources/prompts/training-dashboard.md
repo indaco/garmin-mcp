@@ -22,7 +22,7 @@ Call `getDashboardData` with `weeks` = {{weeks}}. It returns all the data in one
   `rem`, `awake`), `sleepScore`, sleep need `needH`, bedtime `bedMin` (minutes after midnight),
   `rhr`, body battery `bbHigh` and `bbLow`, `stress`, `steps`, `stepGoal`, `floors`.
 - `sync`: what the server fetched. The server keeps a local cache and asks Garmin only for the new
-  days.
+  days. If `failedDays` is more than 0, name these days in chat. Their widgets show "n/a".
 
 If `getDashboardData` fails, use the separate tools: `getHeartRateZones`, `listActivities` (do not
 send `activityType`, because Garmin rejects it), `getHrvRange`, `getSleep` and `getDailySummary`
@@ -88,8 +88,9 @@ indoor. All other keys are outdoor.
   score, body battery high/low. Sleep need against actual sleep for each night
   (`needH`), bedtime regularity (the spread of `bedMin`), sleep
   stages.
-- **Period comparison**: these {{weeks}} weeks against the previous {{weeks}} (`previousActivities`). Show km,
-  time, load and sessions, in total and for each type, with the difference in %.
+- **Period comparison**: these {{weeks}} weeks against the previous {{weeks}}
+  (`previousActivities`). Show km, time, load and sessions, in total and for each type, with the
+  difference in %.
 - **Load safety**: the weekly load ramp (% against the previous week; flag it above +10%). For the
   last 7 days: monotony = mean daily load / standard deviation of daily load (a rest day counts as
   0; flag it above 2.0), and strain = weekly load x monotony (Foster). Label them *estimates*.
@@ -133,24 +134,28 @@ Pick the output that fits where you are running:
   then tell me its path and the command to open it (`xdg-open` / `open`).
 
 Either way, no runtime calls to Garmin: embed the processed data as a constant at the top of the
-file, aggregated - not raw Garmin JSON. Tag every activity and every daily value with its type.
-Then the page can filter in the browser without new data. Put the data between the comments
-`/* garmin-data:start */` and `/* garmin-data:end */`, for example
-`const DATA = /* garmin-data:start */{...}/* garmin-data:end */;`, and write `<\/` for every `</`
-inside it. Keep the markers: the `training-dashboard-update` prompt replaces only this block.
+file, aggregated - not raw Garmin JSON. Use the `getDashboardData` result as this data, without
+changes, and add two fields: `"v": {{dashboardVersion}}` (the version of these instructions) and
+`notes` (the coach notes, a list of HTML strings). The page groups and calculates everything else in
+the browser. Then an update can replace the data with a new `getDashboardData` result and keep the
+page code. Put the data between the comments `/* garmin-data:start */` and `/* garmin-data:end */`,
+for example `const DATA = /* garmin-data:start */{...}/* garmin-data:end */;`, and write `<\/` for
+every `</` inside it. Keep the markers: the `training-dashboard-update` prompt replaces only this
+block.
 
 ### Time window
 
-Under the header, put a window bar. It selects whole Monday-Sunday weeks inside the embedded
-period: presets (last 4, 8, 12... weeks, and all) and a from-week and a to-week selector. Every
-widget about training follows the window, and the browser calculates it again from the embedded
-data. This includes totals, charts, calendar, records, strength exercise stats, and the period
-comparison. The period comparison compares the window with the same number of weeks just before
-it (from `activities` and `previousActivities`). Say "partial" when these weeks start before the data. The tiles "last 7
-days against the 4-week average" end on the last day of the window, and take their baseline from
-all embedded data. The widgets about today do not follow the window, and say so: readiness,
-fitness age and the 14-day recovery panel. The URL hash also keeps the window (for example
-`#run@2026-09-07_2026-10-26`).
+Under the header, put a window bar. It selects whole Monday-Sunday weeks inside the embedded period:
+presets (last 4, 8, 12... weeks, and all) and a from-week and a to-week selector. Every widget about
+training follows the window, and the browser calculates it again from the embedded data. This
+includes totals, charts, calendar, records, strength exercise stats, and the period comparison. The
+period comparison compares the window with the same number of weeks just before it (from
+`activities` and `previousActivities`). Say "partial" when these weeks start before the data. The
+tiles "last 7 days against the 4-week average" end on the last day of the window, and take their
+baseline from all embedded data. The widgets about today do not follow the window, and say so:
+readiness, fitness age and the 14-day recovery panel. The URL hash also keeps the window (for
+example `#run@2026-09-07_2026-10-26`). The last week can still be in progress, when today is not a
+Sunday. Mark it (for example with *), and do not flag its load ramp.
 
 ### Tabs and filter
 
@@ -165,11 +170,12 @@ sessions in the last {{weeks}} weeks"), not empty charts. The URL hash keeps the
 a reload or a shared link opens the same tab.
 
 On the **All** tab, put a row of chips: an "All" chip, then one chip for each type in the colour of
-that type. All types show by default. A click on a type chip shows only that type. A second click
-on the same chip, or a click on "All", shows all types again. The chips filter the header totals,
-weekly volume, consistency calendar, the load bars of load vs. recovery, and the activities table. Recovery data (HRV, sleep, resting HR, body
-battery) is not per type, and the filter never changes it. The **load ratio always uses all
-activities**: say this next to the tile when a filter is active.
+that type. All types show by default. A click on a type chip shows only that type. A second click on
+the same chip, or a click on "All", shows all types again. The chips filter the header totals,
+weekly volume, consistency calendar, the load bars of load vs. recovery, and the activities table.
+Recovery data (HRV, sleep, resting HR, body battery) is not per type, and the filter never changes
+it. The **load ratio always uses all activities**: say this next to the tile when a filter is
+active.
 
 ### All tab, top to bottom
 
@@ -196,7 +202,7 @@ activities**: say this next to the tile when a filter is active.
     the 3 most recent expandable to show laps.
 12. **Coach notes**: at most 5 bullet points, each tied to a specific number in the dashboard
    (e.g. "HRV 12% below baseline for 3 nights while load ratio is 1.4"). Training suggestions
-   only, no medical advice.
+   only, no medical advice. Keep them in `notes` in the data block, not in the page code.
 
 ### Type tabs
 
@@ -266,14 +272,15 @@ If an exercise has only one session, show its sets but no trend chart ("one sess
 Themes: put a "Theme" dropdown in the header, with the themes in groups:
 
 - Auto: System, which uses Midnight on a dark OS and Light on a light OS.
-- Dark: Midnight (the default), Graphite, Ocean, Forest, Plum.
+- Dark: Midnight, Graphite, Ocean, Forest, Plum.
 - Light: Light, Paper, Mist.
 - Accessible: High contrast dark, High contrast light.
 
-Midnight uses these colours: background `#0e1217`, panels `#161c24` and `#1c232d`, lines `#26303d`,
-text `#e6ebf2`, muted text `#8d99aa`, accent `#7cc4ff`, good `#3ecf8e`, bad `#ef5a5a`, warning
-`#f2c94c`. Design the other themes yourself. Define every colour as a CSS token, with one set of
-tokens for each theme. Dark themes use bright type colours, and light themes use darker type
+On first load the theme is Midnight, also on a light OS. System is a choice in the menu, not the
+default. Midnight uses these colours: background `#0e1217`, panels `#161c24` and `#1c232d`, lines
+`#26303d`, text `#e6ebf2`, muted text `#8d99aa`, accent `#7cc4ff`, good `#3ecf8e`, bad `#ef5a5a`,
+warning `#f2c94c`. Design the other themes yourself. Define every colour as a CSS token, with one
+set of tokens for each theme. Dark themes use bright type colours, and light themes use darker type
 colours for contrast. Charts read the tokens and draw again when the theme changes. Keep the choice
 in `localStorage`, wrapped in try/catch, so the page still works when storage is blocked. Apply it
 before the first paint.
