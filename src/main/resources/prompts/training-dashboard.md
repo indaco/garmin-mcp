@@ -251,10 +251,16 @@ movement category, and the **muscle-group balance** (sets per week for each grou
 
 If an exercise has only one session, show its sets but no trend chart ("one session so far").
 
-Design: dark, clean, data-dense but airy. Use one fixed colour for each type, on its tab, chip,
-bars and lines in every chart. Use tabular numbers. Make the page work down to phone width (the
-tab bar scrolls horizontally, the page does not). Make the tabs work with the keyboard. Put
-tooltips on every chart and units on every axis. Use your own visual identity: no third-party app
-names, logos or brand colours.
+Theme: put a Light / Dark / System toggle in the header. System is the default: it follows the OS
+and changes live when the OS changes. Define every colour as a CSS token with a light and a dark
+value. Include a darker variant of each type colour for the light background. Charts read the
+tokens and draw again when the theme changes. Keep the choice in `localStorage`, wrapped in
+try/catch, so the page still works when storage is blocked. Apply it before the first paint.
+
+Design: clean, data-dense but airy. Use one fixed colour for each type, on its tab, chip, bars
+and lines in every chart. Use tabular numbers. Make the page work down to phone width (the tab bar
+scrolls horizontally, the page does not). Make the tabs work with the keyboard. Put tooltips on
+every chart and units on every axis. Use your own visual identity: no third-party app names, logos
+or brand colours.
 
 Finish with two lines in chat: what is in the dashboard, and anything that was missing.

@@ -151,7 +151,8 @@ The server exposes an MCP prompt, `training-dashboard`, with one optional argume
    time (top set, estimated 1RM, volume, rest) and the weekly sets for each movement category.
    Also show the push / pull / legs / core balance;
 7. let you select the weeks on the page (presets and a from/to week selector; the link keeps the
-   window). Each sport has an icon and a colour;
+   window). Each sport has an icon and a colour. A light / dark / system theme toggle is also
+   there (system is the default);
 8. add on the *All* tab: a readiness verdict for today (the dashboard's own heuristic) and the
    fitness age. Also these weeks compared with the weeks before, and the records in the period.
    Also load ramp, monotony and strain, and weekly intensity minutes against the guideline of 150
