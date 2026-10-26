@@ -263,11 +263,20 @@ gives the push:pull ratio. Then:
 
 If an exercise has only one session, show its sets but no trend chart ("one session so far").
 
-Theme: put a Light / Dark / System toggle in the header. System is the default: it follows the OS
-and changes live when the OS changes. Define every colour as a CSS token with a light and a dark
-value. Include a darker variant of each type colour for the light background. Charts read the
-tokens and draw again when the theme changes. Keep the choice in `localStorage`, wrapped in
-try/catch, so the page still works when storage is blocked. Apply it before the first paint.
+Themes: put a "Theme" dropdown in the header, with the themes in groups:
+
+- Auto: System, which uses Midnight on a dark OS and Light on a light OS.
+- Dark: Midnight (the default), Graphite, Ocean, Forest, Plum.
+- Light: Light, Paper, Mist.
+- Accessible: High contrast dark, High contrast light.
+
+Midnight uses these colours: background `#0e1217`, panels `#161c24` and `#1c232d`, lines `#26303d`,
+text `#e6ebf2`, muted text `#8d99aa`, accent `#7cc4ff`, good `#3ecf8e`, bad `#ef5a5a`, warning
+`#f2c94c`. Design the other themes yourself. Define every colour as a CSS token, with one set of
+tokens for each theme. Dark themes use bright type colours, and light themes use darker type
+colours for contrast. Charts read the tokens and draw again when the theme changes. Keep the choice
+in `localStorage`, wrapped in try/catch, so the page still works when storage is blocked. Apply it
+before the first paint.
 
 Selection: every click selects what it shows, and never hides it. A click on a chart legend item
 shows only that series. A second click on the same item shows all series again. The muscle-group
