@@ -22,7 +22,7 @@ public class GarminPrompts {
 
     private static final int DEFAULT_WEEKS = 12;
     /** Version of the dashboard build text. Bump it when the page that it describes changes: updates then rebuild older pages. */
-    static final int DASHBOARD_VERSION = 2;
+    static final int DASHBOARD_VERSION = 3;
     private static final int MAX_WEEKS = 52;
     private static final Set<String> STYLES = Set.of("clean", "poster", "neon", "bib", "magazine", "splits");
     private static final Set<String> FORMATS = Set.of("story", "post", "square");
