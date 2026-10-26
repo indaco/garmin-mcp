@@ -4,10 +4,12 @@ An [MCP](https://modelcontextprotocol.io) server that connects Claude to your ow
 data through the official **Garmin Connect Personal API**: activities, original `.FIT` files,
 HRV, sleep, daily heart rate, HR zones and daily summaries, with no manual exports.
 
-It ships with two ready-made prompts:
+It ships with three ready-made prompts:
 
 - **training-dashboard**: Claude pulls your last weeks of data and builds an interactive
   dashboard that puts training load next to HRV, sleep and resting heart rate;
+- **training-dashboard-update**: Claude adds the new data since the last build to an existing
+  dashboard and keeps the rest of the page;
 - **social-card**: Claude turns a workout into a prompt for an image model (e.g. Gemini
   "Nano Banana") that adds your real stats to your own photo, for Instagram or WhatsApp.
 
@@ -167,8 +169,8 @@ It never invents missing values: a failed call shows up as "n/a" in the affected
 
 ### Before you run a prompt
 
-- **Permissions**: the dashboard makes about 30 tool calls, plus one for each strength workout
-  (sleep and daily summary are fetched one day at a time). In Claude Desktop, answer **Allow always** the first time a garmin tool asks
+- **Permissions**: the dashboard gets its data with one `getDashboardData` call. The first call
+  sends about 35 requests to Garmin. Later calls use the local cache and send about 8. In Claude Desktop, answer **Allow always** the first time a garmin tool asks
   for permission. In Claude Code, allow them for good with `/permissions` → add `mcp__garmin`.
 - **Fresh session**: after a rebuild, prompts and tools change only in a new Claude Code session
   or after a full Claude Desktop restart.
@@ -188,6 +190,25 @@ repository will not dirty it.
 The prompt text lives in
 [`src/main/resources/prompts/training-dashboard.md`](src/main/resources/prompts/training-dashboard.md):
 edit it and rebuild to change the dashboard, or copy it into any chat by hand.
+
+### Update the dashboard
+
+You do not have to build the dashboard again to see new data. The `training-dashboard-update`
+prompt finds the existing dashboard and replaces only its data and its coach notes. It keeps the
+code, the layout and the styles.
+
+| Client | How to run it | What it updates |
+|---|---|---|
+| Claude Desktop | **+** → *garmin* → `training-dashboard-update` → send | the dashboard artifact in the same conversation |
+| Claude Code | `/mcp__garmin__training-dashboard-update` | `garmin-dashboard.html` in the current directory |
+
+Leave `weeks` empty to keep the weeks of the existing dashboard. In a new Claude Desktop
+conversation there is no artifact to update, so the prompt builds a new dashboard.
+
+The server keeps the data of each call in `garmin.data-dir/dashboard-cache.json`. The next call
+asks Garmin only for the days after the last call, plus the last two days again, because Garmin
+can still add data to them. The `.FIT` files of strength sessions and laps stay in
+`garmin.data-dir/fit`, so their sets and laps need no new download.
 
 ## The social card prompt
 
@@ -263,6 +284,7 @@ Prompt text and worked examples:
 | `getSleep` | `/sleep-service/sleep/dailySleep` | date = the morning you woke up |
 | `getHeartRateZones` | `/biometric-service/heartRateZones/v2` | |
 | `getFitnessAge` | `/fitnessage-service/fitnessage/v2/{date}` | fitness age compared with actual age, and its components |
+| `getDashboardData` | the endpoints above | all the data of the dashboard in one call; keeps a local cache and asks Garmin only for new days |
 | `getDailySummary` | `/usersummary-service/usersummary/daily` | steps, stress, body battery |
 | `garminGet` | any other GET | relative path + query string |
 
@@ -328,6 +350,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 - **Code map**:
   - `GarminApiClient`: HTTP, token lifecycle, retries
   - `GarminTools`: MCP tools (`@Tool` methods)
+  - `GarminDashboard`: the `getDashboardData` tool and its local cache
   - `GarminPrompts`: MCP prompts, texts in `src/main/resources/prompts/`
   - `GarminProperties`: `garmin.*` configuration
 

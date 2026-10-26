@@ -26,7 +26,7 @@ public class GarminPrompts {
     private static final Set<String> FORMATS = Set.of("story", "post", "square");
 
     public List<SyncPromptSpecification> specifications() {
-        return List.of(trainingDashboard(), socialCard());
+        return List.of(trainingDashboard(), trainingDashboardUpdate(), socialCard());
     }
 
     private SyncPromptSpecification trainingDashboard() {
@@ -37,18 +37,41 @@ public class GarminPrompts {
                         "Number of weeks to cover, default " + DEFAULT_WEEKS, false)));
         String template = load("prompts/training-dashboard.md");
 
+        return new SyncPromptSpecification(prompt, (exchange, request) ->
+                result(prompt, renderDashboard(template, weeks(request.arguments()))));
+    }
+
+    private SyncPromptSpecification trainingDashboardUpdate() {
+        McpSchema.Prompt prompt = new McpSchema.Prompt(
+                "training-dashboard-update",
+                "Update an existing training dashboard with the Garmin data since its last build "
+                        + "(builds a new one when there is none)",
+                List.of(new McpSchema.PromptArgument("weeks",
+                        "Weeks to cover; empty = keep the weeks of the existing dashboard", false)));
+        String template = load("prompts/training-dashboard-update.md");
+        String build = load("prompts/training-dashboard.md");
+
         return new SyncPromptSpecification(prompt, (exchange, request) -> {
+            boolean given = !arg(request.arguments(), "weeks").isEmpty();
             int weeks = weeks(request.arguments());
-            LocalDate today = LocalDate.now();
-            LocalDate start = today.minusWeeks(weeks);
             return result(prompt, render(template, Map.of(
-                    "weeks", String.valueOf(weeks),
-                    "today", today.toString(),
-                    "startDate", start.toString(),
-                    // one extra week: the dashboard shows whole Monday-Sunday weeks, one more than asked when today is mid-week
-                    "prevStartDate", start.minusWeeks(weeks + 1L).toString(),
-                    "prevEndDate", start.minusDays(1).toString())));
+                    "today", LocalDate.now().toString(),
+                    "weeks", given ? String.valueOf(weeks)
+                            : "the `weeks` value of the data block (" + DEFAULT_WEEKS + " if it has none)",
+                    "build", renderDashboard(build, weeks))));
         });
+    }
+
+    private static String renderDashboard(String template, int weeks) {
+        LocalDate today = LocalDate.now();
+        LocalDate start = today.minusWeeks(weeks);
+        return render(template, Map.of(
+                "weeks", String.valueOf(weeks),
+                "today", today.toString(),
+                "startDate", start.toString(),
+                // one extra week: the dashboard shows whole Monday-Sunday weeks, one more than asked when today is mid-week
+                "prevStartDate", start.minusWeeks(weeks + 1L).toString(),
+                "prevEndDate", start.minusDays(1).toString()));
     }
 
     private SyncPromptSpecification socialCard() {

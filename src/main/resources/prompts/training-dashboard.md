@@ -5,23 +5,28 @@ last **{{weeks}} weeks** (today is {{today}}).
 The point of this dashboard is what social training apps do not show: how training load and
 recovery (HRV, sleep, resting heart rate, body battery) move together. Answer in my language.
 
-## 1. Collect the data (tools, in this order)
+## 1. Collect the data
 
-1. `getHeartRateZones` - my configured HR zones.
-2. `listActivities` with `startDate` = {{startDate}}, `endDate` = {{today}}, `limit` = 200.
-   If the summary lacks a field you need, call it again with `raw=true`. Do not send
-   `activityType`, because Garmin rejects it. Group by type yourself (section 2).
-3. `getHrvRange` from {{startDate}} to {{today}}. If Garmin rejects the range, split it into
-   chunks of 4 weeks.
-4. For the **last 14 days** only: `getSleep` and `getDailySummary`, one call per day.
-5. `getActivityLaps` for the 3 most recent activities, every race (`race: true`) and every run
-   over 15 km. Show their laps (km splits, intervals, warm-up and cool-down).
-6. `getActivitySets` for every Strength activity in the period (at most the 30 most recent; if
-   you skip some, say so): exercises with reps, weight, time and rest for each set, and the
-   primary and secondary muscles of each exercise.
-7. `listActivities` again for the previous window, `startDate` = {{prevStartDate}}, `endDate` =
-   {{prevEndDate}}, `limit` = 200. Use only the totals, for the period comparison.
-8. `getFitnessAge` for {{today}}.
+Call `getDashboardData` with `weeks` = {{weeks}}. It returns all the data in one call:
+
+- `zones`: my HR zones. `fitnessAge`: Garmin's fitness age.
+- `activities`: the activities from {{startDate}} to {{today}}, most recent first, as compact
+  summaries. Strength activities have `exercises`: sets, rest, and the primary and secondary
+  muscles of each exercise. The 3 most recent activities, every race and every run over 15 km
+  have `laps` (km splits, intervals, warm-up and cool-down).
+- `previousActivities`: the activities from {{prevStartDate}} to {{prevEndDate}}, with the fields
+  for the period comparison.
+- `hrv`: one row for each night: `hrv`, `weeklyAvg`, `status`, and the balanced range `low` to
+  `high`.
+- `recovery`: one row for each of the last 14 days: sleep hours (`sleepH`, and `deep`, `light`,
+  `rem`, `awake`), `sleepScore`, sleep need `needH`, bedtime `bedMin` (minutes after midnight),
+  `rhr`, body battery `bbHigh` and `bbLow`, `stress`, `steps`, `stepGoal`, `floors`.
+- `sync`: what the server fetched. The server keeps a local cache and asks Garmin only for the new
+  days.
+
+If `getDashboardData` fails, use the separate tools: `getHeartRateZones`, `listActivities` (do not
+send `activityType`, because Garmin rejects it), `getHrvRange`, `getSleep` and `getDailySummary`
+for each of the last 14 days, `getActivitySets`, `getActivityLaps` and `getFitnessAge`.
 
 Garmin's Personal API has no VO2 max, training status or readiness, race predictor, personal
 records, weight or gear data. Do not look for them. Where this prompt tells you, the dashboard
@@ -80,10 +85,10 @@ indoor. All other keys are outdoor.
   for an activity without it: put all its minutes in the zone of its average HR, and label it
   *approximate*.
 - **Recovery**: nightly HRV vs. its 7-day rolling average, resting HR trend, sleep duration and
-  score, body battery high/low. Sleep need against actual sleep for each night (the sleep data's
-  `sleepNeed.actual`, in minutes), bedtime regularity (the spread of sleep start times), sleep
+  score, body battery high/low. Sleep need against actual sleep for each night
+  (`needH`), bedtime regularity (the spread of `bedMin`), sleep
   stages.
-- **Period comparison**: these {{weeks}} weeks against the previous {{weeks}} (step 7). Show km,
+- **Period comparison**: these {{weeks}} weeks against the previous {{weeks}} (`previousActivities`). Show km,
   time, load and sessions, in total and for each type, with the difference in %.
 - **Load safety**: the weekly load ramp (% against the previous week; flag it above +10%). For the
   last 7 days: monotony = mean daily load / standard deviation of daily load (a rest day counts as
@@ -111,7 +116,7 @@ indoor. All other keys are outdoor.
   weekly sets of each group with the usual range of 10-20 sets/week. Give the push:pull ratio:
   Chest, Shoulders and Triceps against Back and Biceps. The rest between sets for each exercise
   (median `restSec`). The weight of each set as a % of the best estimated 1RM of that exercise.
-- **Walk / Hike**: daily steps against the step goal, and floors climbed (daily summaries, last 14
+- **Walk / Hike**: daily steps against the step goal, and floors climbed (`recovery`, last 14
   days). For hikes, vertical metres per hour (ascent / hours).
 - **Swim**: pace per 100 m, SWOLF (`swolf`), lengths, strokes, pool length (`poolLengthM`).
 - **Padel and other racket sports**: the share of time in Z4-5, peak HR and calories per hour.
@@ -129,7 +134,10 @@ Pick the output that fits where you are running:
 
 Either way, no runtime calls to Garmin: embed the processed data as a constant at the top of the
 file, aggregated - not raw Garmin JSON. Tag every activity and every daily value with its type.
-Then the page can filter in the browser without new data.
+Then the page can filter in the browser without new data. Put the data between the comments
+`/* garmin-data:start */` and `/* garmin-data:end */`, for example
+`const DATA = /* garmin-data:start */{...}/* garmin-data:end */;`, and write `<\/` for every `</`
+inside it. Keep the markers: the `training-dashboard-update` prompt replaces only this block.
 
 ### Time window
 
@@ -138,7 +146,7 @@ period: presets (last 4, 8, 12... weeks, and all) and a from-week and a to-week 
 widget about training follows the window, and the browser calculates it again from the embedded
 data. This includes totals, charts, calendar, records, strength exercise stats, and the period
 comparison. The period comparison compares the window with the same number of weeks just before
-it (from steps 2 and 7). Say "partial" when these weeks start before the data. The tiles "last 7
+it (from `activities` and `previousActivities`). Say "partial" when these weeks start before the data. The tiles "last 7
 days against the 4-week average" end on the last day of the window, and take their baseline from
 all embedded data. The widgets about today do not follow the window, and say so: readiness,
 fitness age and the 14-day recovery panel. The URL hash also keeps the window (for example
