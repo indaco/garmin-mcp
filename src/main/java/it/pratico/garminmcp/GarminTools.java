@@ -50,8 +50,12 @@ public class GarminTools {
 
     @Tool(description = """
             List the user's Garmin activities (most recent first) as a compact summary: id, name, type,
-            local start time, distance (km), duration, average pace, average/max heart rate, cadence, ascent.
-            Dates are yyyy-MM-dd. Set raw=true to get the full JSON returned by Garmin.""")
+            local start time, distance (km), moving duration, average pace, average/max heart rate,
+            cadence, ascent; when Garmin has them: elapsed time (if longer than moving time), race flag,
+            Garmin training load, aerobic/anaerobic training effect and label, seconds in HR zones 1-5,
+            calories, body battery change, steps, power, running form (stride, ground contact, vertical
+            oscillation and ratio), grade-adjusted pace, best efforts (1k, mile, 5k, 10k, half,
+            marathon) and run/walk segments. Dates are yyyy-MM-dd. Set raw=true for Garmin's full JSON.""")
     public String listActivities(
             @ToolParam(required = false, description = "Start date yyyy-MM-dd (optional)") String startDate,
             @ToolParam(required = false, description = "End date yyyy-MM-dd (optional)") String endDate,
@@ -150,7 +154,7 @@ public class GarminTools {
 
     @Tool(description = """
             Strength training sets of an activity, read from the original .FIT file. One entry per
-            exercise, in the order first done, with its active sets: reps, weight (kg, absent for
+            exercise, in the order first done, with its movement category and its active sets: reps, weight (kg, absent for
             bodyweight) and set time in seconds. Rest periods are left out. Exercise names are stable
             across sessions, so they can be used for per-exercise trends. Edits made later in Garmin
             Connect (renamed exercises, corrected reps or weights) are not in the .FIT file.""")
@@ -173,6 +177,8 @@ public class GarminTools {
             ObjectNode exercise = exercises.computeIfAbsent(category + "/" + subtype, key -> {
                 ObjectNode e = mapper.createObjectNode();
                 e.put("exercise", exerciseName(category, subtype, stepNames.get(key)));
+                String cat = category == null ? "" : ExerciseCategory.getStringFromValue(category);
+                e.put("category", cat.isEmpty() ? "Unknown" : words(cat));
                 e.putArray("sets");
                 return e;
             });
@@ -242,7 +248,7 @@ public class GarminTools {
 
     // ------------------------------------------------------------------ helpers
 
-    private ObjectNode summarize(JsonNode a) {
+    ObjectNode summarize(JsonNode a) {
         ObjectNode o = mapper.createObjectNode();
         copy(a, o, "activityId", "id");
         copy(a, o, "activityName", "name");
@@ -265,7 +271,76 @@ public class GarminTools {
         copy(a, o, "maxHR", "maxHR");
         copy(a, o, "averageRunningCadenceInStepsPerMinute", "cadenceSpm");
         copy(a, o, "elevationGain", "ascentM");
+
+        // moving time is near zero for padel or strength: the elapsed time is the session length
+        double elapsedS = a.path("duration").asDouble(0);
+        if (elapsedS - durS >= 60) {
+            o.put("elapsed", hms(elapsedS));
+        }
+        if ("race".equals(a.path("eventType").path("typeKey").asString(null))) {
+            o.put("race", true);
+        }
+        putRounded(a, o, "activityTrainingLoad", "trainingLoad", 1);
+        putRounded(a, o, "aerobicTrainingEffect", "aerobicTE", 1);
+        putRounded(a, o, "anaerobicTrainingEffect", "anaerobicTE", 1);
+        if (a.hasNonNull("trainingEffectLabel")) {
+            o.put("teLabel", a.get("trainingEffectLabel").asString().toLowerCase());
+        }
+        if (a.has("hrTimeInZone_1")) {
+            ArrayNode zones = o.putArray("hrZonesSec");
+            for (int z = 1; z <= 5; z++) {
+                zones.add(Math.round(a.path("hrTimeInZone_" + z).asDouble(0)));
+            }
+        }
+        putRounded(a, o, "calories", "calories", 0);
+        copy(a, o, "differenceBodyBattery", "bodyBatteryDelta");
+        copy(a, o, "steps", "steps");
+        putRounded(a, o, "avgPower", "avgPowerW", 0);
+        putRounded(a, o, "normPower", "normPowerW", 0);
+        putRounded(a, o, "avgStrideLength", "strideCm", 1);
+        putRounded(a, o, "avgGroundContactTime", "gctMs", 0);
+        putRounded(a, o, "avgVerticalOscillation", "vertOscCm", 1);
+        putRounded(a, o, "avgVerticalRatio", "vertRatioPct", 1);
+        double gap = a.path("avgGradeAdjustedSpeed").asDouble(0);
+        if (gap > 0) {
+            o.put("gap", hms(1000.0 / gap) + "/km");
+        }
+
+        ObjectNode best = mapper.createObjectNode();
+        for (String[] f : new String[][]{{"1000", "1k"}, {"1609", "mile"}, {"5000", "5k"}, {"10000", "10k"},
+                {"21098", "half"}, {"42195", "marathon"}}) {
+            double s = a.path("fastestSplit_" + f[0]).asDouble(0);
+            if (s > 0) {
+                best.put(f[1], hms(s));
+            }
+        }
+        if (!best.isEmpty()) {
+            o.set("best", best);
+        }
+
+        // Run Walk Run sessions: pace of the run segments only, and the time spent walking
+        for (JsonNode split : a.path("splitSummaries")) {
+            String type = split.path("splitType").asString("");
+            double speed = split.path("averageSpeed").asDouble(0);
+            if (type.equals("RWD_RUN") && speed > 0) {
+                o.withObjectProperty("runWalk").put("runPace", hms(1000.0 / speed) + "/km")
+                        .put("runKm", round(split.path("distance").asDouble(0) / 1000.0, 2));
+            } else if (type.equals("RWD_WALK")) {
+                o.withObjectProperty("runWalk").put("walkTime", hms(split.path("duration").asDouble(0)));
+            }
+        }
         return o;
+    }
+
+    private static void putRounded(JsonNode from, ObjectNode to, String field, String as, int decimals) {
+        JsonNode v = from.get(field);
+        if (v != null && v.isNumber()) {
+            if (decimals == 0) {
+                to.put(as, Math.round(v.asDouble()));
+            } else {
+                to.put(as, round(v.asDouble(), decimals));
+            }
+        }
     }
 
     private static void copy(JsonNode from, ObjectNode to, String field, String as) {

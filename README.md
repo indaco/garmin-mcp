@@ -135,16 +135,23 @@ The server exposes an MCP prompt, `training-dashboard`, with one optional argume
 (default 12, max 52). It tells Claude to:
 
 1. collect HR zones, activities, HRV, and the last 14 days of sleep and daily summaries;
-2. compute weekly volume, this week vs. the 4-week average, estimated training load and the
-   acute:chronic ratio, running pace and efficiency, time in zones, recovery trends;
+2. compute weekly volume and the last 7 days compared with the 4-week average. Also compute Garmin
+   training load, the acute:chronic ratio, running pace and efficiency, time in zones and recovery
+   trends;
 3. build a dashboard: KPI tiles, weekly volume, consistency heatmap, **load vs. recovery** chart,
    recovery panel, recent activities with laps, and coach notes that use the data;
 4. group activities by type (Run, Strength, Walk, Bike, Padel, Other). The *All* tab has a
    filter chip for each type. Each type has its own tab with its own KPIs and trends (for example
    running pace and efficiency, bike speed and ascent). The filter does not change recovery data.
    The load ratio always uses all activities;
-5. on the *Strength* tab, list each exercise with its sets for each session. Show its trend over
-   time (top set, estimated 1RM, volume).
+5. on the *Run* tab: best efforts, races side by side, pace against heart rate, and the easy and
+   hard share. Also running form (cadence, stride, ground contact, vertical oscillation, power),
+   Run Walk Run segments and training effect;
+6. on the *Strength* tab, list each exercise with its sets for each session. Show its trend over
+   time (top set, estimated 1RM, volume), and the weekly sets for each movement category.
+
+Training load and time in HR zones are Garmin's own numbers. The dashboard uses an estimate only
+for an activity that does not have them, and labels it.
 
 It never invents missing values: a failed call shows up as "n/a" in the affected widget.
 
@@ -236,10 +243,10 @@ Prompt text and worked examples:
 
 | Tool | Endpoint | Notes |
 |---|---|---|
-| `listActivities` | `/activitylist-service/activities/search/activities` | compact summary (km, pace, HR, cadence, ascent); `raw=true` for full JSON |
+| `listActivities` | `/activitylist-service/activities/search/activities` | compact summary (km, moving and elapsed time, pace, HR, cadence, ascent, HR-zone seconds, Garmin training load and training effect, race flag, best efforts, power, running form, run/walk segments); `raw=true` for full JSON |
 | `getActivity` | `/activity-service/activity/{id}` | summary, metadata, segments by type |
 | `getActivityLaps` | `/download-service/files/activity/{id}` | laps decoded from the .FIT file: km, time, pace or speed, HR, cadence, ascent, power, intensity |
-| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, reps, weight (kg), set time |
+| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, movement category, reps, weight (kg), set time |
 | `downloadActivityFit` | `/download-service/files/activity/{id}` | saves `{id}.fit` under `garmin.data-dir/fit` (cached: downloaded once) |
 | `getHrvRange` | `/hrv-service/hrv/daily/{from}/{to}` | overnight HRV |
 | `getDailyHeartRate` | `/wellness-service/wellness/dailyHeartRate` | includes resting HR |
