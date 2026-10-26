@@ -257,10 +257,11 @@ value. Include a darker variant of each type colour for the light background. Ch
 tokens and draw again when the theme changes. Keep the choice in `localStorage`, wrapped in
 try/catch, so the page still works when storage is blocked. Apply it before the first paint.
 
-Design: clean, data-dense but airy. Use one fixed colour for each type, on its tab, chip, bars
-and lines in every chart. Use tabular numbers. Make the page work down to phone width (the tab bar
-scrolls horizontally, the page does not). Make the tabs work with the keyboard. Put tooltips on
-every chart and units on every axis. Use your own visual identity: no third-party app names, logos
-or brand colours.
+Design: clean, data-dense but airy. Make the page title a large h1 (about 32 px), clearly larger
+than the section headings. Use one fixed colour for each type, on its tab, chip, bars and lines in
+every chart. Use tabular numbers. Make the page work down to phone width (the tab bar scrolls
+horizontally, the page does not). Make the tabs work with the keyboard. Put tooltips on every chart
+and units on every axis. Use your own visual identity: no third-party app names, logos or brand
+colours.
 
 Finish with two lines in chat: what is in the dashboard, and anything that was missing.
