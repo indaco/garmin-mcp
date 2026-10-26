@@ -164,9 +164,10 @@ count. A type with no activities in the period stays visible and shows an empty 
 sessions in the last {{weeks}} weeks"), not empty charts. The URL hash keeps the selected tab, so
 a reload or a shared link opens the same tab.
 
-On the **All** tab, put a row of toggle chips: one for each type, in the colour of that type, all
-on by default. The chips filter the header totals, weekly volume, consistency calendar, the load
-bars of load vs. recovery, and the activities table. Recovery data (HRV, sleep, resting HR, body
+On the **All** tab, put a row of chips: an "All" chip, then one chip for each type in the colour of
+that type. All types show by default. A click on a type chip shows only that type. A second click
+on the same chip, or a click on "All", shows all types again. The chips filter the header totals,
+weekly volume, consistency calendar, the load bars of load vs. recovery, and the activities table. Recovery data (HRV, sleep, resting HR, body
 battery) is not per type, and the filter never changes it. The **load ratio always uses all
 activities**: say this next to the tile when a filter is active.
 
@@ -267,6 +268,14 @@ and changes live when the OS changes. Define every colour as a CSS token with a 
 value. Include a darker variant of each type colour for the light background. Charts read the
 tokens and draw again when the theme changes. Keep the choice in `localStorage`, wrapped in
 try/catch, so the page still works when storage is blocked. Apply it before the first paint.
+
+Selection: every click selects what it shows, and never hides it. A click on a chart legend item
+shows only that series. A second click on the same item shows all series again. The muscle-group
+chips of the Strength tab work in the same way.
+
+Colours of a change: show a better value in green, a worse value in red, and no change in grey.
+This applies to every change and delta, for example the change of an exercise or a KPI delta.
+Where a higher value is worse (for example resting HR or the load ramp), an increase is red.
 
 Design: clean, data-dense but airy. Make the page title a large h1 (about 32 px), clearly larger
 than the section headings. Use one fixed colour for each type, on its tab, chip, bars and lines in
