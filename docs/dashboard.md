@@ -36,8 +36,10 @@ the days that the cache does not have, plus the last two days, because Garmin ca
 them. The new data of a day replaces its old data, so a deleted activity also goes away.
 
 The page contains all its data, so it makes no calls to Garmin. The data is between the comments
-`/* garmin-data:start */` and `/* garmin-data:end */`. The `training-dashboard-update` prompt
-replaces only this block and the coach notes.
+`/* garmin-data:start */` and `/* garmin-data:end */`: the `getDashboardData` result, the coach
+notes and a version number. The `training-dashboard-update` prompt replaces only this block. When
+the version of a page is older than the current build instructions, the prompt builds a new page,
+so that the page gets the newest features.
 
 ## Tabs, filter and time window
 

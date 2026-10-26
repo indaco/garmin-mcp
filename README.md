@@ -193,7 +193,8 @@ code, the layout and the styles.
 | Claude Code | `/mcp__garmin__training-dashboard-update` | `garmin-dashboard.html` in the current directory |
 
 Leave `weeks` empty to keep the weeks of the existing dashboard. In a new Claude Desktop
-conversation there is no artifact to update, so the prompt builds a new dashboard.
+conversation there is no artifact to update, so the prompt builds a new dashboard. It also builds a
+new dashboard when the existing one comes from older build instructions, and says so.
 
 The server keeps the data of each call in `garmin.data-dir/dashboard-cache.json`. The next call
 asks Garmin only for the days after the last call, plus the last two days again, because Garmin
