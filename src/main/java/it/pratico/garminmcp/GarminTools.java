@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -47,6 +48,7 @@ public class GarminTools {
     private final GarminProperties props;
     private final ObjectMapper mapper;
     private JsonNode catalogue;
+    private Instant catalogueRetryAt = Instant.EPOCH;
 
     public GarminTools(GarminApiClient api, GarminProperties props, ObjectMapper mapper) {
         this.api = api;
@@ -421,14 +423,14 @@ public class GarminTools {
         byte[] data = api.getBytes("/download-service/files/activity/" + activityId, Map.of());
         Files.createDirectories(dir);
         if (!isZip(data)) {
-            Files.write(target, data);
+            writeAtomically(target, data);
             return target;
         }
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(data))) {
             ZipEntry e;
             while ((e = zip.getNextEntry()) != null) {
                 if (!e.isDirectory() && e.getName().toLowerCase().endsWith(".fit")) {
-                    Files.write(target, zip.readAllBytes());
+                    writeAtomically(target, zip.readAllBytes());
                     return target;
                 }
             }
@@ -495,13 +497,16 @@ public class GarminTools {
         try {
             boolean fresh = Files.isRegularFile(file)
                     && Files.getLastModifiedTime(file).toInstant().isAfter(Instant.now().minus(Duration.ofDays(30)));
-            if (!fresh) {
+            if (!fresh && Instant.now().isAfter(catalogueRetryAt)) {
                 try {
                     byte[] data = api.getExerciseCatalogue();
-                    mapper.readTree(data);
-                    Files.createDirectories(file.getParent());
-                    Files.write(file, data);
+                    if (!mapper.readTree(data).path("categories").isObject()) {
+                        throw new GarminApiClient.GarminApiException("the exercise catalogue has no categories");
+                    }
+                    writeAtomically(file, data);
                 } catch (GarminApiClient.GarminApiException | JacksonException e) {
+                    // a failed download is tried again only after a pause, not on every strength session
+                    catalogueRetryAt = Instant.now().plus(Duration.ofMinutes(10));
                     log.warn("Exercise catalogue not refreshed ({}); {}", e.getMessage(),
                             Files.isRegularFile(file) ? "using the cached copy" : "sets will have no muscles");
                 }
@@ -513,6 +518,14 @@ public class GarminTools {
             log.warn("Cannot read the exercise catalogue: {}", e.getMessage());
         }
         return catalogue;
+    }
+
+    /** Writes a temp file and moves it into place, so a stopped process never leaves a half-written file. */
+    static void writeAtomically(Path target, byte[] data) throws IOException {
+        Files.createDirectories(target.toAbsolutePath().getParent());
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        Files.write(tmp, data);
+        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     /** BENCH_PRESS -> Bench Press */
