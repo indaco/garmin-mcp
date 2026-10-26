@@ -24,23 +24,25 @@ flowchart LR
     C["Claude Desktop / Claude Code"] -- "MCP over stdio" --> S["garmin-mcp (JVM)"]
     S -- "API key → access token (24h)" --> T["Garmin token endpoint"]
     S -- "Bearer token, GET" --> G["Garmin Connect Personal API"]
-    S -- ".FIT downloads" --> F[("~/workspace/garmin-data/fit")]
+    S -- "exercise catalogue, no token" --> E["connect.garmin.com"]
+    S -- ".FIT files and caches" --> F[("~/workspace/garmin-data")]
 ```
 
 ## Contents
 
-1. [Requirements](#requirements)
-2. [Create the personal API key](#1-create-the-personal-api-key)
-3. [Build](#2-build)
-4. [Connect to Claude Desktop](#3a-connect-to-claude-desktop)
-5. [Connect to Claude Code](#3b-connect-to-claude-code)
-6. [The training dashboard prompt](#the-training-dashboard-prompt)
-7. [The social card prompt](#the-social-card-prompt)
-8. [Tools](#tools)
-9. [Configuration](#configuration)
-10. [Troubleshooting](#troubleshooting)
-11. [How it works](#how-it-works)
-12. [Security and terms](#security-and-terms)
+- [Requirements](#requirements)
+- [1. Create the personal API key](#1-create-the-personal-api-key)
+- [2. Build](#2-build)
+- [3a. Connect to Claude Desktop](#3a-connect-to-claude-desktop)
+- [3b. Connect to Claude Code](#3b-connect-to-claude-code)
+- [The training dashboard prompt](#the-training-dashboard-prompt):
+  [update the dashboard](#update-the-dashboard), [all tabs and widgets](docs/dashboard.md)
+- [The social card prompt](#the-social-card-prompt)
+- [Tools](#tools)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [How it works](#how-it-works)
+- [Security and terms](#security-and-terms)
 
 ## Requirements
 
@@ -116,8 +118,8 @@ Add a top-level `mcpServers` key (next to any existing keys, not inside `prefere
 ```
 
 Quit Claude Desktop **completely** (including the tray icon) and start it again: the app spawns
-the server at startup. The `garmin` tools appear in the connectors menu, and the dashboard prompt
-in the **+** menu.
+the server at startup. The `garmin` tools appear in the connectors menu, and the prompts in the
+**+** menu.
 
 ## 3b. Connect to Claude Code
 
@@ -134,44 +136,32 @@ Inside a session, `/mcp` shows the server status and its tools.
 ## The training dashboard prompt
 
 The server exposes an MCP prompt, `training-dashboard`, with one optional argument `weeks`
-(default 12, max 52). It tells Claude to:
+(default 12, max 52). Claude gets all the data with one `getDashboardData` call and builds a
+dashboard with:
 
-1. collect HR zones, activities, HRV, and the last 14 days of sleep and daily summaries;
-2. compute weekly volume and the last 7 days compared with the 4-week average. Also compute Garmin
-   training load, the acute:chronic ratio, running pace and efficiency, time in zones and recovery
-   trends;
-3. build a dashboard: KPI tiles, weekly volume, consistency heatmap, **load vs. recovery** chart,
-   recovery panel, recent activities with laps, and coach notes that use the data;
-4. group activities by type (Run, Strength, Walk, Bike, Padel, Other). The *All* tab has a
-   filter chip for each type. Each type has its own tab with its own KPIs and trends (for example
-   running pace and efficiency, bike speed and ascent). The filter does not change recovery data.
-   The load ratio always uses all activities;
-5. on the *Run* tab: best efforts, races side by side, pace against heart rate, and the easy and
-   hard share. Also running form (cadence, stride, ground contact, vertical oscillation, power),
-   Run Walk Run segments and training effect;
-6. on the *Strength* tab, list each exercise with its sets for each session, grouped by muscle
-   group (chest, back, biceps, triceps and so on). Show its trend over time (top set, estimated
-   1RM, volume, rest) and the weekly sets for each movement category. Also show the balance
-   between the muscle groups;
-7. let you select the weeks on the page (presets and a from/to week selector; the link keeps the
-   window). Each sport has an icon and a colour. A light / dark / system theme toggle is also
-   there (system is the default);
-8. add on the *All* tab: a readiness verdict for today (the dashboard's own heuristic) and the
-   fitness age. Also these weeks compared with the weeks before, and the records in the period.
-   Also load ramp, monotony and strain, and weekly intensity minutes against the guideline of 150
-   minutes. The Run tab adds a race predictor and the pace split of each race. Hike and Swim tabs
-   show when you have these activities.
+- a tab for each sport (Run, Strength, Walk, Bike, Padel, and Hike and Swim when you have them),
+  each with its own colour and icon;
+- on the *All* tab: readiness for today, fitness age, these weeks against the weeks before and
+  the records. Also weekly volume, load safety, intensity minutes, a consistency calendar, load
+  against recovery, the recovery panel and coach notes;
+- on the *Run* tab: best efforts, races side by side, aerobic fitness, running form, a race
+  predictor and the pace split of each race;
+- on the *Strength* tab: every exercise with its sets, grouped by muscle group, its trend over
+  time, and the balance between the muscle groups;
+- a week selector on the page, and a light / dark / system theme toggle.
 
-Training load and time in HR zones are Garmin's own numbers. The dashboard uses an estimate only
-for an activity that does not have them, and labels it.
+The dashboard uses Garmin's own training load, HR zones and training effect. It labels every value
+that it calculates itself as an estimate. Every tab, widget and formula:
+[docs/dashboard.md](docs/dashboard.md).
 
 It never invents missing values: a failed call shows up as "n/a" in the affected widget.
 
 ### Before you run a prompt
 
 - **Permissions**: the dashboard gets its data with one `getDashboardData` call. The first call
-  sends about 35 requests to Garmin. Later calls use the local cache and send about 8. In Claude Desktop, answer **Allow always** the first time a garmin tool asks
-  for permission. In Claude Code, allow them for good with `/permissions` → add `mcp__garmin`.
+  sends about 35 requests to Garmin. Later calls use the local cache and send about 8. In Claude
+  Desktop, answer **Allow always** the first time a garmin tool asks for permission. In Claude
+  Code, allow them for good with `/permissions` → add `mcp__garmin`.
 - **Fresh session**: after a rebuild, prompts and tools change only in a new Claude Code session
   or after a full Claude Desktop restart.
 - **Activity id**: the number at the end of the activity page URL on Garmin Connect web, or ask
@@ -284,8 +274,8 @@ Prompt text and worked examples:
 | `getSleep` | `/sleep-service/sleep/dailySleep` | date = the morning you woke up |
 | `getHeartRateZones` | `/biometric-service/heartRateZones/v2` | |
 | `getFitnessAge` | `/fitnessage-service/fitnessage/v2/{date}` | fitness age compared with actual age, and its components |
-| `getDashboardData` | the endpoints above | all the data of the dashboard in one call; keeps a local cache and asks Garmin only for new days |
 | `getDailySummary` | `/usersummary-service/usersummary/daily` | steps, stress, body battery |
+| `getDashboardData` | the endpoints above | all the data of the dashboard in one call; keeps a local cache and asks Garmin only for new days |
 | `garminGet` | any other GET | relative path + query string |
 
 These Garmin Connect data are not in the Personal API (the endpoints answer 404): VO2 max,
@@ -307,7 +297,7 @@ API reference: <https://developer.garmin.com/gc-developer-program/personal/swagg
 |---|---|---|
 | `garmin.base-url` | `https://personal.connectapi.garmin.com` | Personal API host |
 | `garmin.api-key-file` | `~/.config/garmin-mcp/api-key` | used when `GARMIN_PERSONAL_API_KEY` is not set |
-| `garmin.data-dir` | `~/workspace/garmin-data` | where `.FIT` files are saved |
+| `garmin.data-dir` | `~/workspace/garmin-data` | `.FIT` files, the dashboard cache and the exercise catalogue |
 | `logging.file.name` | `~/.cache/garmin-mcp/garmin-mcp.log` | server log |
 
 ## Troubleshooting
