@@ -142,14 +142,16 @@ The server exposes an MCP prompt, `training-dashboard`, with one optional argume
 4. group activities by type (Run, Strength, Walk, Bike, Padel, Other). The *All* tab has a
    filter chip for each type. Each type has its own tab with its own KPIs and trends (for example
    running pace and efficiency, bike speed and ascent). The filter does not change recovery data.
-   The load ratio always uses all activities.
+   The load ratio always uses all activities;
+5. on the *Strength* tab, list each exercise with its sets for each session. Show its trend over
+   time (top set, estimated 1RM, volume).
 
 It never invents missing values: a failed call shows up as "n/a" in the affected widget.
 
 ### Before you run a prompt
 
-- **Permissions**: the dashboard makes about 30 tool calls (sleep and daily summary are fetched
-  one day at a time). In Claude Desktop, answer **Allow always** the first time a garmin tool asks
+- **Permissions**: the dashboard makes about 30 tool calls, plus one for each strength workout
+  (sleep and daily summary are fetched one day at a time). In Claude Desktop, answer **Allow always** the first time a garmin tool asks
   for permission. In Claude Code, allow them for good with `/permissions` → add `mcp__garmin`.
 - **Fresh session**: after a rebuild, prompts and tools change only in a new Claude Code session
   or after a full Claude Desktop restart.
@@ -237,6 +239,7 @@ Prompt text and worked examples:
 | `listActivities` | `/activitylist-service/activities/search/activities` | compact summary (km, pace, HR, cadence, ascent); `raw=true` for full JSON |
 | `getActivity` | `/activity-service/activity/{id}` | summary, metadata, segments by type |
 | `getActivityLaps` | `/download-service/files/activity/{id}` | laps decoded from the .FIT file: km, time, pace or speed, HR, cadence, ascent, power, intensity |
+| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, reps, weight (kg), set time |
 | `downloadActivityFit` | `/download-service/files/activity/{id}` | saves `{id}.fit` under `garmin.data-dir/fit` (cached: downloaded once) |
 | `getHrvRange` | `/hrv-service/hrv/daily/{from}/{to}` | overnight HRV |
 | `getDailyHeartRate` | `/wellness-service/wellness/dailyHeartRate` | includes resting HR |
@@ -289,9 +292,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
   return it as JSON or as plain text; both are handled.
 - **Content negotiation**: JSON calls send `Accept: application/json` and retry once with `*/*`
   on `406`.
-- **Laps**: the Personal API has no laps endpoint, so `getActivityLaps` downloads the original
-  .FIT file once (cached under `garmin.data-dir/fit`) and decodes its lap messages with the
-  official [Garmin FIT SDK](https://github.com/garmin/fit-java-sdk).
+- **Laps and sets**: the Personal API has no endpoint for laps or exercise sets.
+  `getActivityLaps` and `getActivitySets` download the original .FIT file one time and keep it
+  under `garmin.data-dir/fit`. They decode its lap and set messages with the official
+  [Garmin FIT SDK](https://github.com/garmin/fit-java-sdk). The .FIT file does not contain
+  exercise changes that you make later in Garmin Connect.
 - **Code map**:
   - `GarminApiClient`: HTTP, token lifecycle, retries
   - `GarminTools`: MCP tools (`@Tool` methods)
