@@ -21,13 +21,27 @@ widget. **Never invent, interpolate or estimate missing values.**
 
 ## 2. Compute
 
-- **Weekly volume** per sport: distance (km), moving time, number of sessions.
+Group every activity into one of these types by its `type` key:
+
+| Type | Garmin type keys |
+|---|---|
+| Run | `running`, `trail_running`, `treadmill_running`, `track_running`, any key ending in `_running` |
+| Strength | `strength_training`, any key containing `strength` |
+| Walk | `walking`, `hiking`, `casual_walking`, `speed_walking` |
+| Bike | `cycling`, `road_biking`, `mountain_biking`, `gravel_cycling`, `indoor_cycling`, `virtual_ride`, any key containing `biking` or `cycling` |
+| Padel | any key containing `padel` |
+| Other | all other keys; in chat, name the keys that are in this group |
+
+- **Weekly volume** for each type: distance (km), moving time, number of sessions.
 - **This week vs. the previous 4-week average** for distance, time and sessions (delta in %).
 - **Training load** per activity = moving minutes x intensity factor, where intensity factor is
   avg HR / max HR (from the zones) - label it clearly as an *estimate*. Then the acute (7-day)
   vs. chronic (28-day) load ratio, with the 0.8-1.3 band highlighted.
 - **Running**: average pace and average HR per week, plus efficiency (metres per heartbeat =
   speed in m/min / avg HR) to show aerobic progress.
+- **Per type**, for the type tabs: sessions, total and average moving time, average and max HR,
+  share of the total load. Add distance and pace for Run and Walk, and distance, average speed
+  (km/h) and ascent for Bike. Strength and Padel have no distance: never show 0 km for them.
 - **Time in HR zones** per week, from the activities' average HR mapped onto my zones (say that
   it is approximate when per-second data is not used).
 - **Recovery**: nightly HRV vs. its 7-day rolling average, resting HR trend, sleep duration and
@@ -44,27 +58,55 @@ Pick the output that fits where you are running:
   then tell me its path and the command to open it (`xdg-open` / `open`).
 
 Either way, no runtime calls to Garmin: embed the processed data as a constant at the top of the
-file, aggregated - not raw Garmin JSON.
+file, aggregated - not raw Garmin JSON. Tag every activity and every daily value with its type.
+Then the page can filter in the browser without new data.
 
-Layout, top to bottom:
+### Tabs and filter
+
+Put a tab bar under the header: **All**, **Run**, **Strength**, **Walk**, **Bike**, **Padel**, and
+**Other** only if it has activities. Each tab label shows its session count. A type with no
+activities in the period stays visible and shows an empty state ("no sessions in the last
+{{weeks}} weeks"), not empty charts. The URL hash keeps the selected tab, so a reload or a shared
+link opens the same tab.
+
+On the **All** tab, put a row of toggle chips: one for each type, in the colour of that type, all
+on by default. The chips filter the header totals, weekly volume, consistency calendar, the load
+bars of load vs. recovery, and the activities table. Recovery data (HRV, sleep, resting HR, body
+battery) is not per type, and the filter never changes it. The **load ratio always uses all
+activities**: say this next to the tile when a filter is active.
+
+### All tab, top to bottom
 
 1. **Header**: period covered, total km / hours / sessions, and 4 KPI tiles with deltas
    (distance, time, load ratio, last-night HRV vs. baseline).
-2. **Weekly volume**: stacked bars per sport, with a 4-week moving average line.
+2. **Weekly volume**: stacked bars for each type, with a line for the 4-week moving average.
 3. **Consistency calendar**: a GitHub-style heatmap of daily training minutes.
-4. **Load vs. recovery**: one chart with daily load (bars) and HRV (line) on twin axes - the
-   heart of the dashboard.
-5. **Running trends**: pace and efficiency per week; HR zone distribution per week.
-6. **Recovery panel**: HRV with baseline band, resting HR, sleep hours and score (last 14 days).
-7. **Recent activities**: table with date, type, name, distance, time, pace, avg HR, ascent;
+4. **Load vs. recovery**: one chart with daily load (bars, stacked by type) and HRV (line) on
+   twin axes - the heart of the dashboard.
+5. **Recovery panel**: HRV with baseline band, resting HR, sleep hours and score (last 14 days).
+6. **Recent activities**: table with date, type, name, distance, time, pace, avg HR, ascent;
    the 3 most recent expandable to show laps.
-8. **Coach notes**: at most 5 bullet points, each tied to a specific number in the dashboard
+7. **Coach notes**: at most 5 bullet points, each tied to a specific number in the dashboard
    (e.g. "HRV 12% below baseline for 3 nights while load ratio is 1.4"). Training suggestions
    only, no medical advice.
 
-Design: dark, clean, data-dense but airy; one accent colour for running, distinct hues for other
-sports, consistent across all charts; tabular numbers; responsive down to phone width; tooltips
-on every chart; units on every axis. Use your own visual identity: no third-party app names,
-logos or brand colours.
+### Type tabs
+
+Each type tab shows only that type's data:
+
+1. **KPI tiles**: the numbers for each type from section 2, this week compared with the 4-week
+   average.
+2. **Weekly chart**: sessions and moving time for each week (bars). Add distance for Run, Walk
+   and Bike.
+3. **Type trends**: Run - pace and efficiency for each week, HR zone distribution for each week.
+   Bike - average speed and ascent for each week. Walk - pace for each week. Strength and Padel -
+   average HR and average session length for each week.
+4. **Activities**: the table for that type only, with laps where you got them.
+
+Design: dark, clean, data-dense but airy. Use one fixed colour for each type, on its tab, chip,
+bars and lines in every chart. Use tabular numbers. Make the page work down to phone width (the
+tab bar scrolls horizontally, the page does not). Make the tabs work with the keyboard. Put
+tooltips on every chart and units on every axis. Use your own visual identity: no third-party app
+names, logos or brand colours.
 
 Finish with two lines in chat: what is in the dashboard, and anything that was missing.

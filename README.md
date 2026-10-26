@@ -138,7 +138,11 @@ The server exposes an MCP prompt, `training-dashboard`, with one optional argume
 2. compute weekly volume, this week vs. the 4-week average, estimated training load and the
    acute:chronic ratio, running pace and efficiency, time in zones, recovery trends;
 3. build a dashboard: KPI tiles, weekly volume, consistency heatmap, **load vs. recovery** chart,
-   running trends, recovery panel, recent activities with laps, and data-backed coach notes.
+   recovery panel, recent activities with laps, and coach notes that use the data;
+4. group activities by type (Run, Strength, Walk, Bike, Padel, Other). The *All* tab has a
+   filter chip for each type. Each type has its own tab with its own KPIs and trends (for example
+   running pace and efficiency, bike speed and ascent). The filter does not change recovery data.
+   The load ratio always uses all activities.
 
 It never invents missing values: a failed call shows up as "n/a" in the affected widget.
 
