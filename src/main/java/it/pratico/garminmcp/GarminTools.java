@@ -402,7 +402,7 @@ public class GarminTools {
         }
     }
 
-    private static JsonNode firstArray(JsonNode json) {
+    static JsonNode firstArray(JsonNode json) {
         for (String k : List.of("activityList", "activities", "items", "data")) {
             if (json.path(k).isArray()) {
                 return json.get(k);

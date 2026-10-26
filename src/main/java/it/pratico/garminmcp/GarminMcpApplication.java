@@ -18,10 +18,10 @@ public class GarminMcpApplication {
         SpringApplication.run(GarminMcpApplication.class, args);
     }
 
-    /** Exposes every @Tool method of GarminTools as an MCP tool. */
+    /** Exposes every @Tool method of GarminTools and GarminDashboard as an MCP tool. */
     @Bean
-    ToolCallbackProvider garminToolCallbacks(GarminTools tools) {
-        return MethodToolCallbackProvider.builder().toolObjects(tools).build();
+    ToolCallbackProvider garminToolCallbacks(GarminTools tools, GarminDashboard dashboard) {
+        return MethodToolCallbackProvider.builder().toolObjects(tools, dashboard).build();
     }
 
     /** Exposes the prompts of GarminPrompts as MCP prompts. */
