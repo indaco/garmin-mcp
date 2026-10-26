@@ -9,6 +9,9 @@ import com.garmin.fit.LapMesg;
 import com.garmin.fit.SetMesg;
 import com.garmin.fit.SetType;
 import com.garmin.fit.Sport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -22,6 +25,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,9 +41,12 @@ import java.util.zip.ZipInputStream;
 @Component
 public class GarminTools {
 
+    private static final Logger log = LoggerFactory.getLogger(GarminTools.class);
+
     private final GarminApiClient api;
     private final GarminProperties props;
     private final ObjectMapper mapper;
+    private JsonNode catalogue;
 
     public GarminTools(GarminApiClient api, GarminProperties props, ObjectMapper mapper) {
         this.api = api;
@@ -155,7 +163,8 @@ public class GarminTools {
 
     @Tool(description = """
             Strength training sets of an activity, read from the original .FIT file. One entry per
-            exercise, in the order first done, with its movement category and its active sets: reps,
+            exercise, in the order first done, with its movement category, its primary and secondary
+            muscles (from Garmin's exercise catalogue) and its active sets: reps,
             weight (kg, absent when none was recorded), set time in seconds and the rest after the set
             (restSec). Exercise names are stable across sessions, so they can be used for per-exercise
             trends. Edits made later in Garmin Connect (renamed exercises, corrected reps or weights)
@@ -171,12 +180,15 @@ public class GarminTools {
         }
         ObjectNode out = mapper.createObjectNode();
         out.put("activityId", activityId);
-        out.set("exercises", groupSets(fit.getSetMesgs(), stepNames));
+        out.set("exercises", groupSets(fit.getSetMesgs(), stepNames, exerciseCatalogue()));
         return out.toString();
     }
 
-    /** One entry per exercise, in the order first done; a rest period becomes restSec on the set before it. */
-    ArrayNode groupSets(List<SetMesg> sets, Map<String, String> stepNames) {
+    /**
+     * One entry per exercise, in the order first done; a rest period becomes restSec on the set before it.
+     * Muscles come from Garmin's exercise catalogue ({@code catalogue} = its "categories" node, may be null).
+     */
+    ArrayNode groupSets(List<SetMesg> sets, Map<String, String> stepNames, JsonNode catalogue) {
         Map<String, ObjectNode> exercises = new LinkedHashMap<>();
         ObjectNode previous = null;
         for (SetMesg s : sets) {
@@ -194,6 +206,15 @@ public class GarminTools {
                 e.put("exercise", exerciseName(category, subtype, stepNames.get(key)));
                 String cat = category == null ? "" : ExerciseCategory.getStringFromValue(category);
                 e.put("category", cat.isEmpty() ? "Unknown" : words(cat));
+                if (catalogue != null && !cat.isEmpty()) {
+                    String name = exerciseConstant(cat, subtype);
+                    // exercises without a subtype are listed under the category's own name, e.g. PLANK/PLANK
+                    JsonNode entry = catalogue.path(cat).path("exercises").path(name.isEmpty() ? cat : name);
+                    if (entry.isObject()) {
+                        e.set("primaryMuscles", muscles(entry.path("primaryMuscles")));
+                        e.set("secondaryMuscles", muscles(entry.path("secondaryMuscles")));
+                    }
+                }
                 e.putArray("sets");
                 return e;
             });
@@ -434,17 +455,64 @@ public class GarminTools {
         if (cat.isEmpty() || cat.equals("UNKNOWN")) {
             return stepName == null || stepName.isBlank() ? "Unknown exercise" : stepName;
         }
-        String name = "";
-        if (subtype != null) {
-            try {
-                // the SDK has one name list per category, e.g. BENCH_PRESS -> BenchPressExerciseName
-                name = (String) Class.forName("com.garmin.fit." + words(cat).replace(" ", "") + "ExerciseName")
-                        .getMethod("getStringFromValue", Integer.class).invoke(null, subtype);
-            } catch (ReflectiveOperationException e) {
-                // no name list for this category: use the category
+        String name = exerciseConstant(cat, subtype);
+        return words(name.isEmpty() ? cat : name);
+    }
+
+    /** The SDK constant of an exercise, e.g. INCLINE_SMITH_MACHINE_BENCH_PRESS; "" when the SDK has no name for it. */
+    private static String exerciseConstant(String cat, Integer subtype) {
+        if (subtype == null) {
+            return "";
+        }
+        try {
+            // the SDK has one name list per category, e.g. BENCH_PRESS -> BenchPressExerciseName
+            return (String) Class.forName("com.garmin.fit." + words(cat).replace(" ", "") + "ExerciseName")
+                    .getMethod("getStringFromValue", Integer.class).invoke(null, subtype);
+        } catch (ReflectiveOperationException e) {
+            return "";
+        }
+    }
+
+    private ArrayNode muscles(JsonNode list) {
+        ArrayNode out = mapper.createArrayNode();
+        for (JsonNode m : list) {
+            if (!m.asString("").isBlank()) {
+                out.add(words(m.asString()));
             }
         }
-        return words(name.isEmpty() ? cat : name);
+        return out;
+    }
+
+    /**
+     * Garmin's exercise catalogue, cached in {@code <data-dir>/exercises.json} and refreshed after 30 days.
+     * Returns its "categories" node, or null when there is no copy at all: sets still work, without muscles.
+     */
+    private synchronized JsonNode exerciseCatalogue() {
+        if (catalogue != null) {
+            return catalogue;
+        }
+        Path file = Path.of(props.dataDir(), "exercises.json");
+        try {
+            boolean fresh = Files.isRegularFile(file)
+                    && Files.getLastModifiedTime(file).toInstant().isAfter(Instant.now().minus(Duration.ofDays(30)));
+            if (!fresh) {
+                try {
+                    byte[] data = api.getExerciseCatalogue();
+                    mapper.readTree(data);
+                    Files.createDirectories(file.getParent());
+                    Files.write(file, data);
+                } catch (GarminApiClient.GarminApiException | JacksonException e) {
+                    log.warn("Exercise catalogue not refreshed ({}); {}", e.getMessage(),
+                            Files.isRegularFile(file) ? "using the cached copy" : "sets will have no muscles");
+                }
+            }
+            if (Files.isRegularFile(file)) {
+                catalogue = mapper.readTree(Files.readAllBytes(file)).path("categories");
+            }
+        } catch (IOException | JacksonException e) {
+            log.warn("Cannot read the exercise catalogue: {}", e.getMessage());
+        }
+        return catalogue;
     }
 
     /** BENCH_PRESS -> Bench Press */
