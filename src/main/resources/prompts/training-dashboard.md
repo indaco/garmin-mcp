@@ -17,7 +17,8 @@ recovery (HRV, sleep, resting heart rate, body battery) move together. Answer in
 5. `getActivityLaps` for the 3 most recent activities, every race (`race: true`) and every run
    over 15 km. Show their laps (km splits, intervals, warm-up and cool-down).
 6. `getActivitySets` for every Strength activity in the period (at most the 30 most recent; if
-   you skip some, say so): exercises with reps, weight, time and rest for each set.
+   you skip some, say so): exercises with reps, weight, time and rest for each set, and the
+   primary and secondary muscles of each exercise.
 7. `listActivities` again for the previous window, `startDate` = {{prevStartDate}}, `endDate` =
    {{prevEndDate}}, `limit` = 200. Use only the totals, for the period comparison.
 8. `getFitnessAge` for {{today}}.
@@ -102,14 +103,14 @@ indoor. All other keys are outdoor.
   *estimate*. The long run share of the km of each week (flag it above 35%). The pace split of
   each race and long run from its laps: first half and second half pace (even, negative or
   positive split). The grade-adjusted pace (`gap`) next to the pace, and the ascent for each week.
-- **Strength extras**: completed sets for each week and each muscle group. Use this mapping of the
-  exercise `category`: Push = Bench Press, Shoulder Press, Push Up, Triceps Extension, Flye,
-  Lateral Raise; Pull = Row, Pull Up, Curl, Shrug; Legs = Squat, Lunge, Deadlift, Hip Raise,
-  Leg Curl, Calf Raise, Hip Stability, Hyperextension; Core = Core, Crunch, Plank, Sit Up,
-  Leg Raise, Chop; Other = all other categories (Cardio, Warm Up, conditioning). Compare the
-  weekly sets of each group with the usual range of 10-20 sets/week, and give the push:pull
-  ratio. The rest between sets for each exercise (median `restSec`). The weight of each set as
-  a % of the best estimated 1RM of that exercise.
+- **Strength extras**: the muscle group of each exercise, from the group of its first primary
+  muscle. Groups: Chest = Chest; Back = Lats, Traps, Lower Back; Shoulders; Biceps; Triceps;
+  Forearms = Forearm; Quads; Hamstrings; Glutes; Calves; Abs = Abs, Obliques; Hips = Hips,
+  Abductors, Adductors; Other = no muscle data. For each group, the completed sets per week: a set
+  counts 1 for each primary muscle group and 0.5 for each secondary one. Compare the average
+  weekly sets of each group with the usual range of 10-20 sets/week. Give the push:pull ratio:
+  Chest, Shoulders and Triceps against Back and Biceps. The rest between sets for each exercise
+  (median `restSec`). The weight of each set as a % of the best estimated 1RM of that exercise.
 - **Walk / Hike**: daily steps against the step goal, and floors climbed (daily summaries, last 14
   days). For hikes, vertical metres per hour (ascent / hours).
 - **Swim**: pace per 100 m, SWOLF (`swolf`), lengths, strokes, pool length (`poolLengthM`).
@@ -231,13 +232,15 @@ for each session. **Padel** adds avg HR and time in Z3+ for each session, Z4-5 s
 It also adds calories per hour, training effect, and its load against a run of the same length.
 
 The **Strength** tab adds, after the weekly chart: a weekly chart of completed sets for each
-movement category, and the **muscle-group balance** (sets per week for each group against the
-10-20 band, and the push:pull ratio). Then:
+movement category, and the **muscle-group balance**. The balance shows one bar for each muscle
+group: its average completed sets per week in the selected weeks, against the 10-20 band. It also
+gives the push:pull ratio. Then:
 
-1. **Exercises**: a table with one row for each exercise. Show the name, sessions, last date and
-   last top set (for example "70 kg x 6"). Also show the best estimated 1RM, the change since the
-   first session (arrow and %) and a sparkline of the top set. The user can sort by every column
-   and use a search box.
+1. **Exercises**: a table with one row for each exercise, grouped by muscle group. Each group has
+   a header row with its number of exercises and completed sets. Show the name, sessions, last
+   date and last top set (for example "70 kg x 6"). Also show the best estimated 1RM, the change
+   since the first session (arrow and %) and a sparkline of the top set. The user can sort by
+   every column inside each group, filter by group with chips, and use a search box.
 2. **Exercise detail**: when the user selects a row (click or Enter), a panel opens with
    - a trend chart over time for each session: top-set weight and estimated 1RM (lines, kg) and
      volume (bars, kg). Use reps instead of kg for exercises without weight, and seconds for timed
@@ -247,7 +250,7 @@ movement category, and the **muscle-group balance** (sets per week for each grou
      estimated 1RM and the rest after it. The panel header shows the median rest of the exercise.
    The URL hash also keeps the selected exercise (for example `#strength/barbell-box-squat`).
 3. **Sessions**: each Strength activity opens to show all its exercises and sets, in the order
-   the user did them.
+   the user did them. Each exercise shows its muscle group.
 
 If an exercise has only one session, show its sets but no trend chart ("one session so far").
 

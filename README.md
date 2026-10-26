@@ -147,9 +147,10 @@ The server exposes an MCP prompt, `training-dashboard`, with one optional argume
 5. on the *Run* tab: best efforts, races side by side, pace against heart rate, and the easy and
    hard share. Also running form (cadence, stride, ground contact, vertical oscillation, power),
    Run Walk Run segments and training effect;
-6. on the *Strength* tab, list each exercise with its sets for each session. Show its trend over
-   time (top set, estimated 1RM, volume, rest) and the weekly sets for each movement category.
-   Also show the push / pull / legs / core balance;
+6. on the *Strength* tab, list each exercise with its sets for each session, grouped by muscle
+   group (chest, back, biceps, triceps and so on). Show its trend over time (top set, estimated
+   1RM, volume, rest) and the weekly sets for each movement category. Also show the balance
+   between the muscle groups;
 7. let you select the weeks on the page (presets and a from/to week selector; the link keeps the
    window). Each sport has an icon and a colour. A light / dark / system theme toggle is also
    there (system is the default);
@@ -255,7 +256,7 @@ Prompt text and worked examples:
 | `listActivities` | `/activitylist-service/activities/search/activities` | compact summary (km, moving and elapsed time, pace, HR, cadence, ascent, HR-zone seconds, Garmin training load and training effect, intensity minutes, race flag, best efforts, power, running form, run/walk segments, swim SWOLF/lengths/strokes); `raw=true` for full JSON |
 | `getActivity` | `/activity-service/activity/{id}` | summary, metadata, segments by type |
 | `getActivityLaps` | `/download-service/files/activity/{id}` | laps decoded from the .FIT file: km, time, pace or speed, HR, cadence, ascent, power, intensity |
-| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, movement category, reps, weight (kg), set time, rest after the set |
+| `getActivitySets` | `/download-service/files/activity/{id}` | strength sets decoded from the .FIT file: exercise, movement category, primary and secondary muscles, reps, weight (kg), set time, rest after the set |
 | `downloadActivityFit` | `/download-service/files/activity/{id}` | saves `{id}.fit` under `garmin.data-dir/fit` (cached: downloaded once) |
 | `getHrvRange` | `/hrv-service/hrv/daily/{from}/{to}` | overnight HRV |
 | `getDailyHeartRate` | `/wellness-service/wellness/dailyHeartRate` | includes resting HR |
@@ -319,6 +320,11 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
   under `garmin.data-dir/fit`. They decode its lap and set messages with the official
   [Garmin FIT SDK](https://github.com/garmin/fit-java-sdk). The .FIT file does not contain
   exercise changes that you make later in Garmin Connect.
+- **Muscles**: the .FIT file has no muscle data. `getActivitySets` reads the primary and secondary
+  muscles of each exercise from Garmin's public exercise catalogue, the file that the Garmin
+  Connect web app uses. The server downloads it without your token, keeps a copy in
+  `garmin.data-dir/exercises.json` and refreshes it after 30 days. If the download fails, the
+  server uses the old copy. Without any copy, the sets have no muscles.
 - **Code map**:
   - `GarminApiClient`: HTTP, token lifecycle, retries
   - `GarminTools`: MCP tools (`@Tool` methods)

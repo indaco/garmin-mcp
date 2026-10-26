@@ -111,13 +111,28 @@ class GarminToolsTest {
         ArrayNode out = tools.groupSets(List.of(
                 set(SetType.ACTIVE, 12, 35f, 206f), set(SetType.REST, null, null, 90f),
                 set(SetType.ACTIVE, 10, 50f, 123f), set(SetType.REST, null, null, 120f),
-                set(SetType.ACTIVE, 0, null, 7f)), Map.of());
+                set(SetType.ACTIVE, 0, null, 7f)), Map.of(), null);
         assertEquals(1, out.size());
         assertEquals("Barbell Box Squat", out.get(0).get("exercise").asString());
         assertEquals("Squat", out.get(0).get("category").asString());
+        assertFalse(out.get(0).has("primaryMuscles"));
         assertEquals("[{\"reps\":12,\"kg\":35.0,\"seconds\":206,\"restSec\":90},"
                 + "{\"reps\":10,\"kg\":50.0,\"seconds\":123,\"restSec\":120},"
                 + "{\"reps\":0,\"seconds\":7}]", out.get(0).get("sets").toString());
+    }
+
+    @Test
+    void musclesComeFromTheExerciseCatalogue() {
+        JsonNode catalogue = json.readTree("""
+                {"SQUAT":{"exercises":{"BARBELL_BOX_SQUAT":{"primaryMuscles":["QUADS","GLUTES"],"secondaryMuscles":["HAMSTRINGS",""]}}},
+                 "PLANK":{"exercises":{"PLANK":{"primaryMuscles":["ABS"],"secondaryMuscles":["SHOULDERS"]}}}}""");
+        SetMesg plank = set(SetType.ACTIVE, null, null, 60f);
+        plank.setCategory(0, ExerciseCategory.PLANK);
+        plank.setCategorySubtype(0, null);
+        ArrayNode out = tools.groupSets(List.of(set(SetType.ACTIVE, 6, 70f, 257f), plank), Map.of(), catalogue);
+        assertEquals("[\"Quads\",\"Glutes\"]", out.get(0).get("primaryMuscles").toString());
+        assertEquals("[\"Hamstrings\"]", out.get(0).get("secondaryMuscles").toString());
+        assertEquals("[\"Abs\"]", out.get(1).get("primaryMuscles").toString());
     }
 
     private static SetMesg set(short type, Integer reps, Float kg, Float seconds) {

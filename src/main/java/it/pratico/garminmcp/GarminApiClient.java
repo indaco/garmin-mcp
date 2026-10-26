@@ -35,6 +35,7 @@ public class GarminApiClient {
     private static final Logger log = LoggerFactory.getLogger(GarminApiClient.class);
     private static final String TOKEN_PATH =
             "/personalapitoken-service/personal-api/personal-api-key/token";
+    private static final String EXERCISE_CATALOGUE_URL = "https://connect.garmin.com/web-data/exercises/Exercises.json";
     /** Re-obtain the token a bit before the documented 24h validity. */
     private static final Duration DEFAULT_TOKEN_TTL = Duration.ofHours(23);
 
@@ -68,6 +69,30 @@ public class GarminApiClient {
     /** GET a binary resource (e.g. activity file download). */
     public byte[] getBytes(String path, Map<String, String> query) {
         return get(path, query, "*/*");
+    }
+
+    /**
+     * GET Garmin's exercise catalogue (primary and secondary muscles per exercise), a public static file of
+     * the Garmin Connect web app. Sent without the token: it is another host and needs no authentication.
+     */
+    public byte[] getExerciseCatalogue() {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(EXERCISE_CATALOGUE_URL))
+                .timeout(Duration.ofSeconds(60))
+                .header("Accept", "application/json")
+                .GET()
+                .build();
+        try {
+            HttpResponse<byte[]> resp = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            if (resp.statusCode() / 100 != 2) {
+                throw new GarminApiException("GET exercise catalogue -> HTTP " + resp.statusCode());
+            }
+            return resp.body();
+        } catch (IOException e) {
+            throw new GarminApiException("Network error reading the exercise catalogue: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GarminApiException("Interrupted", e);
+        }
     }
 
     // ------------------------------------------------------------------ internals
