@@ -17,12 +17,16 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * All the data of the training dashboard in one call, with a local cache in {@code <data-dir>/dashboard-cache.json}:
@@ -44,6 +48,7 @@ public class GarminDashboard {
     private final GarminProperties props;
     private final ObjectMapper mapper;
     private int calls;
+    private int failedDays;
 
     public GarminDashboard(GarminTools tools, GarminApiClient api, GarminProperties props, ObjectMapper mapper) {
         this.tools = tools;
@@ -67,9 +72,10 @@ public class GarminDashboard {
         // one extra week before: the dashboard shows whole Monday-Sunday weeks
         LocalDate prevStart = start.minusWeeks(w + 1L);
         calls = 0;
+        failedDays = 0;
 
         ObjectNode cache = load();
-        int before = cache.path("activities").size();
+        Set<String> before = new HashSet<>(cache.path("activities").propertyNames());
         syncActivities(cache, prevStart, today);
         syncHrv(cache, start, today);
         syncRecovery(cache, today.minusDays(RECOVERY_DAYS - 1), today);
@@ -100,7 +106,8 @@ public class GarminDashboard {
         out.set("recovery", between(cache.path("recovery"), today.minusDays(RECOVERY_DAYS - 1), today));
         out.putObject("sync")
                 .put("garminCalls", calls) // one-time .FIT downloads for new sets and laps not included
-                .put("newActivities", Math.max(0, cache.path("activities").size() - before))
+                .put("newActivities", cache.path("activities").propertyNames().stream().filter(id -> !before.contains(id)).count())
+                .put("failedDays", failedDays)
                 .put("cachedActivities", cache.path("activities").size());
         return out.toString();
     }
@@ -109,7 +116,8 @@ public class GarminDashboard {
 
     private void syncActivities(ObjectNode cache, LocalDate from, LocalDate to) {
         ObjectNode byId = cache.withObjectProperty("activities");
-        for (LocalDate[] r : toFetch(date(cache, "activitiesFrom"), date(cache, "activitiesTo"), from, to)) {
+        LocalDate cachedFrom = date(cache, "activitiesFrom"), cachedTo = date(cache, "activitiesTo");
+        for (LocalDate[] r : toFetch(cachedFrom, cachedTo, from, to)) {
             // refetched days replace what the cache has, so a deleted or edited activity disappears too
             for (Iterator<Map.Entry<String, JsonNode>> it = byId.properties().iterator(); it.hasNext(); ) {
                 LocalDate d = dayOf(it.next().getValue());
@@ -127,7 +135,9 @@ public class GarminDashboard {
                 JsonNode json = api.getJson("/activitylist-service/activities/search/activities", q);
                 JsonNode list = json.isArray() ? json : GarminTools.firstArray(json);
                 if (list == null) {
-                    break;
+                    // abort before save(): the days of this range are already removed from the cache
+                    throw new GarminApiClient.GarminApiException("Unexpected activity list response: "
+                            + json.toString().substring(0, Math.min(200, json.toString().length())));
                 }
                 for (JsonNode a : list) {
                     byId.set(a.path("activityId").asString(), tools.summarize(a));
@@ -137,12 +147,13 @@ public class GarminDashboard {
                 }
             }
         }
-        widen(cache, "activitiesFrom", "activitiesTo", from, to);
+        setCovered(cache, "activitiesFrom", "activitiesTo", covered(cachedFrom, cachedTo, from, to));
     }
 
     private void syncHrv(ObjectNode cache, LocalDate from, LocalDate to) {
         ObjectNode byDate = cache.withObjectProperty("hrv");
-        for (LocalDate[] r : toFetch(date(cache, "hrvFrom"), date(cache, "hrvTo"), from, to)) {
+        LocalDate cachedFrom = date(cache, "hrvFrom"), cachedTo = date(cache, "hrvTo");
+        for (LocalDate[] r : toFetch(cachedFrom, cachedTo, from, to)) {
             // Garmin may reject long ranges: ask 4 weeks at a time
             for (LocalDate a = r[0]; !a.isAfter(r[1]); a = a.plusDays(28)) {
                 String path = "/hrv-service/hrv/daily/" + a + "/" + (a.plusDays(27).isAfter(r[1]) ? r[1] : a.plusDays(27));
@@ -159,19 +170,26 @@ public class GarminDashboard {
                 }
             }
         }
-        widen(cache, "hrvFrom", "hrvTo", from, to);
+        setCovered(cache, "hrvFrom", "hrvTo", covered(cachedFrom, cachedTo, from, to));
     }
 
     private void syncRecovery(ObjectNode cache, LocalDate from, LocalDate to) {
         ObjectNode byDate = cache.withObjectProperty("recovery");
-        LocalDate refreshFrom = to.minusDays(REFRESH_DAYS - 1L);
+        LocalDate refreshFrom = recoveryRefreshFrom(date(cache, "recoveryTo"), to);
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
             if (byDate.has(d.toString()) && d.isBefore(refreshFrom)) {
                 continue;
             }
             String day = d.toString();
-            byDate.set(day, recoveryRow(day, call(() -> tools.getSleep(day)), call(() -> tools.getDailySummary(day))));
+            try {
+                byDate.set(day, recoveryRow(day, call(() -> tools.getSleep(day)), call(() -> tools.getDailySummary(day))));
+            } catch (GarminApiClient.GarminApiException e) {
+                // keep the old row, if any; the day is fetched again on the next call
+                failedDays++;
+                log.warn("Recovery data of {} not fetched: {}", day, e.getMessage());
+            }
         }
+        cache.put("recoveryTo", to.toString());
         // the cache keeps only what a dashboard can show
         byDate.properties().removeIf(e -> LocalDate.parse(e.getKey()).isBefore(from.minusDays(RECOVERY_DAYS)));
     }
@@ -227,6 +245,23 @@ public class GarminDashboard {
             out.add(new LocalDate[]{tail, to});
         }
         return out;
+    }
+
+    /**
+     * The range that the cache covers after fetching {@link #toFetch}'s ranges: the union when the old and
+     * the new range touch or overlap, else only [from, to], because the days between them were never fetched.
+     */
+    static LocalDate[] covered(LocalDate cachedFrom, LocalDate cachedTo, LocalDate from, LocalDate to) {
+        if (cachedFrom == null || cachedTo == null || cachedTo.plusDays(1).isBefore(from) || cachedFrom.isAfter(to.plusDays(1))) {
+            return new LocalDate[]{from, to};
+        }
+        return new LocalDate[]{cachedFrom.isBefore(from) ? cachedFrom : from, cachedTo.isAfter(to) ? cachedTo : to};
+    }
+
+    /** Recovery rows from the last {@value #REFRESH_DAYS} days before the last sync on are fetched again. */
+    static LocalDate recoveryRefreshFrom(LocalDate lastSync, LocalDate today) {
+        LocalDate last = lastSync == null || lastSync.isAfter(today) ? today : lastSync;
+        return last.minusDays(REFRESH_DAYS - 1L);
     }
 
     // ------------------------------------------------------------------ output
@@ -290,9 +325,10 @@ public class GarminDashboard {
         return Path.of(props.dataDir(), "dashboard-cache.json");
     }
 
-    private ObjectNode load() {
+    ObjectNode load() {
         try {
-            if (Files.isRegularFile(file()) && mapper.readTree(Files.readAllBytes(file())) instanceof ObjectNode o) {
+            if (Files.isRegularFile(file()) && mapper.readTree(Files.readAllBytes(file())) instanceof ObjectNode o
+                    && Stream.of("activities", "hrv", "recovery").allMatch(f -> o.path(f).isMissingNode() || o.path(f).isObject())) {
                 return o;
             }
         } catch (IOException | JacksonException e) {
@@ -302,11 +338,7 @@ public class GarminDashboard {
     }
 
     private void save(ObjectNode cache) throws IOException {
-        Files.createDirectories(file().getParent());
-        Path tmp = file().resolveSibling("dashboard-cache.json.tmp");
-        Files.write(tmp, mapper.writeValueAsBytes(cache));
-        // replace in one step, so an interrupted write never leaves a half-written cache
-        Files.move(tmp, file(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        GarminTools.writeAtomically(file(), mapper.writeValueAsBytes(cache));
     }
 
     // ------------------------------------------------------------------ helpers
@@ -326,20 +358,27 @@ public class GarminDashboard {
         }
     }
 
+    /** A date field of the cache; null when missing or not a date, so the range is fetched again. */
     private static LocalDate date(JsonNode cache, String field) {
-        String v = cache.path(field).asString(null);
-        return v == null ? null : LocalDate.parse(v);
+        return parse(cache.path(field).asString(""));
     }
 
-    private static void widen(ObjectNode cache, String fromField, String toField, LocalDate from, LocalDate to) {
-        LocalDate f = date(cache, fromField), t = date(cache, toField);
-        cache.put(fromField, (f == null || from.isBefore(f) ? from : f).toString());
-        cache.put(toField, (t == null || to.isAfter(t) ? to : t).toString());
+    private static void setCovered(ObjectNode cache, String fromField, String toField, LocalDate[] range) {
+        cache.put(fromField, range[0].toString());
+        cache.put(toField, range[1].toString());
     }
 
     private static LocalDate dayOf(JsonNode a) {
         String s = a.path("start").asString("");
-        return s.length() >= 10 ? LocalDate.parse(s.substring(0, 10)) : null;
+        return s.length() >= 10 ? parse(s.substring(0, 10)) : null;
+    }
+
+    private static LocalDate parse(String s) {
+        try {
+            return s.isEmpty() ? null : LocalDate.parse(s);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     private static void copy(JsonNode from, ObjectNode to, String field, String as) {
