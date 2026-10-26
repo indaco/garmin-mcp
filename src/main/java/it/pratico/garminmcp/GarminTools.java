@@ -1,9 +1,13 @@
 package it.pratico.garminmcp;
 
+import com.garmin.fit.ExerciseCategory;
+import com.garmin.fit.ExerciseTitleMesg;
 import com.garmin.fit.FitDecoder;
 import com.garmin.fit.FitMessages;
 import com.garmin.fit.FitRuntimeException;
 import com.garmin.fit.LapMesg;
+import com.garmin.fit.SetMesg;
+import com.garmin.fit.SetType;
 import com.garmin.fit.Sport;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -19,6 +23,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -96,13 +101,7 @@ public class GarminTools {
             Use it for intervals and per-km splits; getActivity does not have them.""")
     public String getActivityLaps(@ToolParam(description = "Garmin activity id") long activityId)
             throws IOException {
-        FitMessages fit;
-        try (InputStream in = Files.newInputStream(fetchFit(activityId))) {
-            fit = new FitDecoder().decode(in);
-        } catch (FitRuntimeException e) {
-            throw new GarminApiClient.GarminApiException("Cannot decode the .FIT file of " + activityId
-                    + ": " + e.getMessage(), e);
-        }
+        FitMessages fit = decodeFit(activityId);
         Sport sport = fit.getSessionMesgs().isEmpty() ? null : fit.getSessionMesgs().getFirst().getSport();
         boolean foot = sport == Sport.RUNNING || sport == Sport.WALKING || sport == Sport.HIKING;
 
@@ -146,6 +145,49 @@ public class GarminTools {
             out.put("sport", sport.name().toLowerCase());
         }
         out.set("laps", laps);
+        return out.toString();
+    }
+
+    @Tool(description = """
+            Strength training sets of an activity, read from the original .FIT file. One entry per
+            exercise, in the order first done, with its active sets: reps, weight (kg, absent for
+            bodyweight) and set time in seconds. Rest periods are left out. Exercise names are stable
+            across sessions, so they can be used for per-exercise trends. Edits made later in Garmin
+            Connect (renamed exercises, corrected reps or weights) are not in the .FIT file.""")
+    public String getActivitySets(@ToolParam(description = "Garmin activity id") long activityId)
+            throws IOException {
+        FitMessages fit = decodeFit(activityId);
+        Map<String, String> stepNames = new HashMap<>();
+        for (ExerciseTitleMesg t : fit.getExerciseTitleMesgs()) {
+            if (t.getNumWktStepName() > 0) {
+                stepNames.put(t.getExerciseCategory() + "/" + t.getExerciseName(), t.getWktStepName(0));
+            }
+        }
+        Map<String, ObjectNode> exercises = new LinkedHashMap<>();
+        for (SetMesg s : fit.getSetMesgs()) {
+            if (s.getSetType() == null || s.getSetType() != SetType.ACTIVE) {
+                continue;
+            }
+            Integer category = s.getNumCategory() > 0 ? s.getCategory(0) : null;
+            Integer subtype = s.getNumCategorySubtype() > 0 ? s.getCategorySubtype(0) : null;
+            ObjectNode exercise = exercises.computeIfAbsent(category + "/" + subtype, key -> {
+                ObjectNode e = mapper.createObjectNode();
+                e.put("exercise", exerciseName(category, subtype, stepNames.get(key)));
+                e.putArray("sets");
+                return e;
+            });
+            ObjectNode set = ((ArrayNode) exercise.get("sets")).addObject();
+            putIfSet(set, "reps", s.getRepetitions());
+            if (s.getWeight() != null && s.getWeight() > 0) {
+                set.put("kg", round(s.getWeight(), 1));
+            }
+            if (s.getDuration() != null) {
+                set.put("seconds", Math.round(s.getDuration()));
+            }
+        }
+        ObjectNode out = mapper.createObjectNode();
+        out.put("activityId", activityId);
+        out.putArray("exercises").addAll(exercises.values());
         return out.toString();
     }
 
@@ -266,6 +308,48 @@ public class GarminTools {
         }
         throw new GarminApiClient.GarminApiException("The download of activity " + activityId
                 + " is a zip without a .fit file");
+    }
+
+    private FitMessages decodeFit(long activityId) throws IOException {
+        try (InputStream in = Files.newInputStream(fetchFit(activityId))) {
+            return new FitDecoder().decode(in);
+        } catch (FitRuntimeException e) {
+            throw new GarminApiClient.GarminApiException("Cannot decode the .FIT file of " + activityId
+                    + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Garmin's exercise name (e.g. "Incline Smith Machine Bench Press"), falling back to the category,
+     * then to the workout step name for custom exercises, which have no known category.
+     */
+    static String exerciseName(Integer category, Integer subtype, String stepName) {
+        String cat = category == null ? "" : ExerciseCategory.getStringFromValue(category);
+        if (cat.isEmpty() || cat.equals("UNKNOWN")) {
+            return stepName == null || stepName.isBlank() ? "Unknown exercise" : stepName;
+        }
+        String name = "";
+        if (subtype != null) {
+            try {
+                // the SDK has one name list per category, e.g. BENCH_PRESS -> BenchPressExerciseName
+                name = (String) Class.forName("com.garmin.fit." + words(cat).replace(" ", "") + "ExerciseName")
+                        .getMethod("getStringFromValue", Integer.class).invoke(null, subtype);
+            } catch (ReflectiveOperationException e) {
+                // no name list for this category: use the category
+            }
+        }
+        return words(name.isEmpty() ? cat : name);
+    }
+
+    /** BENCH_PRESS -> Bench Press */
+    private static String words(String constant) {
+        StringBuilder b = new StringBuilder();
+        for (String w : constant.toLowerCase().split("_")) {
+            if (!w.isEmpty()) {
+                b.append(b.isEmpty() ? "" : " ").append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+            }
+        }
+        return b.toString();
     }
 
     private static void putIfSet(ObjectNode o, String name, Number v) {

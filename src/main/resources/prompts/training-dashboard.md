@@ -9,12 +9,15 @@ recovery (HRV, sleep, resting heart rate, body battery) move together. Answer in
 
 1. `getHeartRateZones` - my configured HR zones.
 2. `listActivities` with `startDate` = {{startDate}}, `endDate` = {{today}}, `limit` = 200.
-   If the summary lacks a field you need, call it again with `raw=true`.
+   If the summary lacks a field you need, call it again with `raw=true`. Do not send
+   `activityType`, because Garmin rejects it. Group by type yourself (section 2).
 3. `getHrvRange` from {{startDate}} to {{today}}. If Garmin rejects the range, split it into
    chunks of 4 weeks.
 4. For the **last 14 days** only: `getSleep` and `getDailySummary`, one call per day.
 5. Call `getActivityLaps` only for the 3 most recent activities, to show their laps (km splits,
    intervals, warm-up/cool-down).
+6. `getActivitySets` for every Strength activity in the period (at most the 30 most recent; if
+   you skip some, say so): exercises with reps, weight and time for each set.
 
 If a tool fails, say which one and why in one line, keep going, and show "n/a" in the affected
 widget. **Never invent, interpolate or estimate missing values.**
@@ -29,7 +32,7 @@ Group every activity into one of these types by its `type` key:
 | Strength | `strength_training`, any key containing `strength` |
 | Walk | `walking`, `hiking`, `casual_walking`, `speed_walking` |
 | Bike | `cycling`, `road_biking`, `mountain_biking`, `gravel_cycling`, `indoor_cycling`, `virtual_ride`, any key containing `biking` or `cycling` |
-| Padel | any key containing `padel` |
+| Padel | `paddelball`, any key containing `padel` or `paddel` |
 | Other | all other keys; in chat, name the keys that are in this group |
 
 - **Weekly volume** for each type: distance (km), moving time, number of sessions.
@@ -41,7 +44,15 @@ Group every activity into one of these types by its `type` key:
   speed in m/min / avg HR) to show aerobic progress.
 - **Per type**, for the type tabs: sessions, total and average moving time, average and max HR,
   share of the total load. Add distance and pace for Run and Walk, and distance, average speed
-  (km/h) and ascent for Bike. Strength and Padel have no distance: never show 0 km for them.
+  (km/h) and ascent for Bike. Strength and Padel have no useful distance or pace. Do not show them,
+  also when Garmin records a few metres.
+- **Strength, per exercise** (group the sets by the `exercise` name across sessions): sessions,
+  last date, total sets and reps. For each session: the top set (heaviest weight, with its reps),
+  the volume (sum of kg x reps) and the estimated 1RM of the best set. Use Epley: kg x (1 + reps /
+  30), only for sets of 1-12 reps, and label it an *estimate*. Exercises with reps but no kg: max
+  reps in a set and total reps. Timed exercises (no reps): longest set in seconds. For each
+  exercise, the change of the top set and of the estimated 1RM from its first to its last session
+  in the period.
 - **Time in HR zones** per week, from the activities' average HR mapped onto my zones (say that
   it is approximate when per-second data is not used).
 - **Recovery**: nightly HRV vs. its 7-day rolling average, resting HR trend, sleep duration and
@@ -102,6 +113,24 @@ Each type tab shows only that type's data:
    Bike - average speed and ascent for each week. Walk - pace for each week. Strength and Padel -
    average HR and average session length for each week.
 4. **Activities**: the table for that type only, with laps where you got them.
+
+The **Strength** tab adds, after the weekly chart:
+
+1. **Exercises**: a table with one row for each exercise. Show the name, sessions, last date and
+   last top set (for example "70 kg x 6"). Also show the best estimated 1RM, the change since the
+   first session (arrow and %) and a sparkline of the top set. The user can sort by every column
+   and use a search box.
+2. **Exercise detail**: when the user selects a row (click or Enter), a panel opens with
+   - a trend chart over time for each session: top-set weight and estimated 1RM (lines, kg) and
+     volume (bars, kg). Use reps instead of kg for exercises without weight, and seconds for timed
+     ones;
+   - every session of that exercise, newest first: date, workout name and its sets
+     (for example "35 x 12, 50 x 10, 60 x 8, 70 x 6").
+   The URL hash also keeps the selected exercise (for example `#strength/barbell-box-squat`).
+3. **Sessions**: each Strength activity opens to show all its exercises and sets, in the order
+   the user did them.
+
+If an exercise has only one session, show its sets but no trend chart ("one session so far").
 
 Design: dark, clean, data-dense but airy. Use one fixed colour for each type, on its tab, chip,
 bars and lines in every chart. Use tabular numbers. Make the page work down to phone width (the
