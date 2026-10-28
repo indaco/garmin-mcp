@@ -1,5 +1,13 @@
 # garmin-mcp
 
+> [!IMPORTANT]
+> **This fork is deprecated and gets no more updates.**
+>
+> - Use [garmin-personal-mcp](https://github.com/indaco/garmin-personal-mcp) instead. It runs with
+>   `npx` (no Java), and the server writes the dashboard from widgets that you can edit.
+> - The work in this fork is offered to the original project in
+>   [apratico/garmin-mcp#1](https://github.com/apratico/garmin-mcp/issues/1).
+
 An [MCP](https://modelcontextprotocol.io) server that connects Claude to your own Garmin Connect
 data through the official **Garmin Connect Personal API**: activities, original `.FIT` files,
 HRV, sleep, daily heart rate, HR zones and daily summaries, with no manual exports.
